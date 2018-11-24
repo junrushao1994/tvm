@@ -68,6 +68,43 @@ def _linear(x, w, b, name):
     return wxb, k
 
 
+def gru(n_seq_len=128, n_num_hidden=128, n_input_dim=128, n_batch_size=1):
+    # This GRU includes input projection and all bias terms, should exactly match that of cuDNN
+    seq_len = tvm.var("seq_len")
+    batch_size = tvm.var("batch_size")
+    num_hidden = tvm.var("num_hidden")
+    input_dim = tvm.var("input_dim")
+    # Define the input
+    x = tvm.placeholder((seq_len, batch_size, input_dim), name="x")
+    # Define weight and bias for input projection and hidden state transformation
+    w_i2h = tvm.placeholder((3, num_hidden, input_dim), name="w_i2h")
+    b_i2h = tvm.placeholder((3, num_hidden), name="b_h2h")
+    w_h2h = tvm.placeholder((3, num_hidden, num_hidden), name="w_h2h")
+    b_h2h = tvm.placeholder((3, num_hidden), name="b_h2h")
+    # Define hidden state and cell state
+    s_h = tvm.placeholder((seq_len, batch_size, num_hidden), name="s_h")
+    s_h_init = tvm.compute((1, batch_size, num_hidden), lambda *i: 0.0, name="s_h_init")
+    # Do the transformation, the bias for input projection can be fused into that of hidden transformation
+    l_i2h, k_i2h = _linear(x, w_i2h, b_i2h, name="l_i2h")
+    l_h2h, k_h2h = _linear(s_h, w_h2h, b_h2h, name="l_h2h")
+    # Computation inside an GRU cell
+    g_r = tvm.compute((seq_len, batch_size, num_hidden), lambda t, i, j: l_i2h[t, i, 0, j] + l_h2h[t, i, 0, j], name="g_r")
+    g_i = tvm.compute((seq_len, batch_size, num_hidden), lambda t, i, j: l_i2h[t, i, 1, j] + l_h2h[t, i, 1, j], name="g_i")
+    g_h = tvm.compute((seq_len, batch_size, num_hidden), lambda t, i, j: l_i2h[t, i, 2, j] + g_r[t, i, j] * l_h2h[t, i, 2, j], name="g_h")
+    n_h = tvm.compute((seq_len, batch_size, num_hidden), lambda *i: (1.0 - g_i(*i)) * g_h(*i) + g_i(*i) * s_h(*i), name="n_h")
+    # Define update rules explicitly
+    u_h = tvm.compute((seq_len, batch_size, num_hidden), lambda *i: n_h(*i), name="u_h")
+    # Finally, define the scanning itself
+    scan_h = tvm.scan(
+        init=[s_h_init],
+        update=[u_h],
+        state_placeholder=[s_h],
+        inputs=[x],
+        name="gru_scan")
+    # schedule
+    s = tvm.create_schedule(scan_h.op)
+
+
 def lstm(n_seq_len=128, n_num_hidden=128, n_input_dim=128, n_batch_size=1):
     # This LSTM includes input projection and all bias terms, should exactly match that of cuDNN
     seq_len = tvm.var("seq_len")
@@ -112,6 +149,7 @@ def lstm(n_seq_len=128, n_num_hidden=128, n_input_dim=128, n_batch_size=1):
 
 
 def main():
+    gru()
     lstm()
 
 
