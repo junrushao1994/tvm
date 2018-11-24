@@ -68,6 +68,41 @@ def _linear(x, w, b, name):
     return wxb, k
 
 
+def vanilla(n_seq_len=128, n_num_hidden=128, n_input_dim=128, n_batch_size=1):
+    # This vanilla RNN includes input projection and all bias terms, should exactly match that of cuDNN
+    seq_len = tvm.var("seq_len")
+    batch_size = tvm.var("batch_size")
+    num_hidden = tvm.var("num_hidden")
+    input_dim = tvm.var("input_dim")
+    # Define the input
+    x = tvm.placeholder((seq_len, batch_size, input_dim), name="x")
+    # Define weight and bias for input projection and hidden state transformation
+    w_i2h = tvm.placeholder((1, num_hidden, input_dim), name="w_i2h")
+    w_h2h = tvm.placeholder((1, num_hidden, num_hidden), name="w_h2h")
+    b_h2h = tvm.placeholder((1, num_hidden), name="b_h2h")
+    # Define hidden state and cell state
+    s_h = tvm.placeholder((seq_len, batch_size, num_hidden), name="s_h")
+    s_h_init = tvm.compute((1, batch_size, num_hidden), lambda *i: 0.0, name="s_h_init")
+    # Do the transformation, the bias for input projection can be fused into that of hidden transformation
+    l_i2h, k_i2h = _linear(x, w_i2h, None, name="l_i2h")
+    l_h2h, k_h2h = _linear(s_h, w_h2h, b_h2h, name="l_h2h")
+    # Sum up the transformed inputs and previous hidden states
+    g = tvm.compute((seq_len, batch_size, 1, num_hidden), lambda *i: l_i2h(*i) + l_h2h(*i), name="g")
+    # Computation inside an LSTM cell
+    n_h = tvm.compute((seq_len, batch_size, num_hidden), lambda t, i, j: tvm.tanh(g[t, i, 0, j]), name="g_i")
+    # Define update rules explicitly
+    u_h = tvm.compute((seq_len, batch_size, num_hidden), lambda *i: n_h(*i), name="u_h")
+    # Finally, define the scanning itself
+    scan_h = tvm.scan(
+        init=[s_h_init],
+        update=[u_h],
+        state_placeholder=[s_h],
+        inputs=[x],
+        name="lstm_scan")
+    # schedule
+    s = tvm.create_schedule([scan_h.op])
+
+
 def gru(n_seq_len=128, n_num_hidden=128, n_input_dim=128, n_batch_size=1):
     # This GRU includes input projection and all bias terms, should exactly match that of cuDNN
     seq_len = tvm.var("seq_len")
@@ -149,6 +184,7 @@ def lstm(n_seq_len=128, n_num_hidden=128, n_input_dim=128, n_batch_size=1):
 
 
 def main():
+    vanilla()
     gru()
     lstm()
 
