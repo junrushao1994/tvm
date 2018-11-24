@@ -50,20 +50,20 @@ def _linear(x, w, b, name):
     if w is None:
         k = None
         wx = tvm.compute((seq_len, batch_size, num_gemm, num_hidden),
-                          lambda t, m, a, j: x[t, m, j],
+                          lambda t, n, a, c: x[t, n, c],
                           name=name + "_w")
     else:
         k = tvm.reduce_axis((0, input_dim), name=name + "_k")
         wx = tvm.compute((seq_len, batch_size, num_gemm, num_hidden),
-                          lambda t, m, a, j: tvm.sum(w[a, j, k] * x[t - 1, m, k], axis=k),
+                          lambda t, n, a, c: tvm.sum(w[a, c, k] * x[t - 1, n, k], axis=k),
                           name=name + "_w")
     if b is None:
         wxb = tvm.compute((seq_len, batch_size, num_gemm, num_hidden),
-                           lambda t, m, a, j: wx[t, m, a, j],
+                           lambda t, n, a, c: wx[t, n, a, c],
                            name=name + "_b")
     else:
         wxb = tvm.compute((seq_len, batch_size, num_gemm, num_hidden),
-                           lambda t, m, a, j: wx[t, m, a, j] + b[a, j],
+                           lambda t, n, a, c: wx[t, n, a, c] + b[a, c],
                            name=name + "_b")
     return wxb, k
 
@@ -89,7 +89,7 @@ def vanilla(n_seq_len=128, n_num_hidden=128, n_input_dim=128, n_batch_size=1):
     # Sum up the transformed inputs and previous hidden states
     g = tvm.compute((seq_len, batch_size, 1, num_hidden), lambda *i: l_i2h(*i) + l_h2h(*i), name="g")
     # Computation inside an LSTM cell
-    n_h = tvm.compute((seq_len, batch_size, num_hidden), lambda t, i, j: tvm.tanh(g[t, i, 0, j]), name="g_i")
+    n_h = tvm.compute((seq_len, batch_size, num_hidden), lambda t, n, c: tvm.tanh(g[t, n, 0, c]), name="g_i")
     # Define update rules explicitly
     u_h = tvm.compute((seq_len, batch_size, num_hidden), lambda *i: n_h(*i), name="u_h")
     # Finally, define the scanning itself
@@ -123,9 +123,9 @@ def gru(n_seq_len=128, n_num_hidden=128, n_input_dim=128, n_batch_size=1):
     l_i2h, k_i2h = _linear(x, w_i2h, b_i2h, name="l_i2h")
     l_h2h, k_h2h = _linear(s_h, w_h2h, b_h2h, name="l_h2h")
     # Computation inside an GRU cell
-    g_r = tvm.compute((seq_len, batch_size, num_hidden), lambda t, i, j: l_i2h[t, i, 0, j] + l_h2h[t, i, 0, j], name="g_r")
-    g_i = tvm.compute((seq_len, batch_size, num_hidden), lambda t, i, j: l_i2h[t, i, 1, j] + l_h2h[t, i, 1, j], name="g_i")
-    g_h = tvm.compute((seq_len, batch_size, num_hidden), lambda t, i, j: l_i2h[t, i, 2, j] + g_r[t, i, j] * l_h2h[t, i, 2, j], name="g_h")
+    g_r = tvm.compute((seq_len, batch_size, num_hidden), lambda t, n, c: l_i2h[t, n, 0, c] + l_h2h[t, n, 0, c], name="g_r")
+    g_i = tvm.compute((seq_len, batch_size, num_hidden), lambda t, n, c: l_i2h[t, n, 1, c] + l_h2h[t, n, 1, c], name="g_i")
+    g_h = tvm.compute((seq_len, batch_size, num_hidden), lambda t, n, c: l_i2h[t, n, 2, c] + g_r[t, n, c] * l_h2h[t, n, 2, c], name="g_h")
     n_h = tvm.compute((seq_len, batch_size, num_hidden), lambda *i: (1.0 - g_i(*i)) * g_h(*i) + g_i(*i) * s_h(*i), name="n_h")
     # Define update rules explicitly
     u_h = tvm.compute((seq_len, batch_size, num_hidden), lambda *i: n_h(*i), name="u_h")
@@ -163,12 +163,12 @@ def lstm(n_seq_len=128, n_num_hidden=128, n_input_dim=128, n_batch_size=1):
     # Sum up the transformed inputs and previous hidden states
     g = tvm.compute((seq_len, batch_size, 4, num_hidden), lambda *i: l_i2h(*i) + l_h2h(*i), name="g")
     # Computation inside an LSTM cell
-    g_i = tvm.compute((seq_len, batch_size, num_hidden), lambda t, i, j: tvm.sigmoid(g[t, i, 0, j]), name="g_i")
-    g_f = tvm.compute((seq_len, batch_size, num_hidden), lambda t, i, j: tvm.sigmoid(g[t, i, 1, j]), name="g_f")
-    g_c = tvm.compute((seq_len, batch_size, num_hidden), lambda t, i, j: tvm.tanh   (g[t, i, 2, j]), name="g_c")
-    g_o = tvm.compute((seq_len, batch_size, num_hidden), lambda t, i, j: tvm.sigmoid(g[t, i, 3, j]), name="g_o")
-    n_c = tvm.compute((seq_len, batch_size, num_hidden), lambda t, i, j: g_f[t, i, j] * s_c[t - 1, i, j] + g_i[t, i, j] * g_c[t, i, j], name="n_c")
-    n_h = tvm.compute((seq_len, batch_size, num_hidden), lambda t, i, j: g_o[t, i, j] * tvm.tanh(n_c[t, i, j]), name="n_h")
+    g_i = tvm.compute((seq_len, batch_size, num_hidden), lambda t, n, c: tvm.sigmoid(g[t, n, 0, c]), name="g_i")
+    g_f = tvm.compute((seq_len, batch_size, num_hidden), lambda t, n, c: tvm.sigmoid(g[t, n, 1, c]), name="g_f")
+    g_c = tvm.compute((seq_len, batch_size, num_hidden), lambda t, n, c: tvm.tanh   (g[t, n, 2, c]), name="g_c")
+    g_o = tvm.compute((seq_len, batch_size, num_hidden), lambda t, n, c: tvm.sigmoid(g[t, n, 3, c]), name="g_o")
+    n_c = tvm.compute((seq_len, batch_size, num_hidden), lambda t, n, c: g_f[t, n, c] * s_c[t - 1, n, c] + g_i[t, n, c] * g_c[t, n, c], name="n_c")
+    n_h = tvm.compute((seq_len, batch_size, num_hidden), lambda t, n, c: g_o[t, n, c] * tvm.tanh(n_c[t, n, c]), name="n_h")
     # Define update rules explicitly
     u_h = tvm.compute((seq_len, batch_size, num_hidden), lambda *i: n_h(*i), name="u_h")
     u_c = tvm.compute((seq_len, batch_size, num_hidden), lambda *i: n_c(*i), name="u_c")
