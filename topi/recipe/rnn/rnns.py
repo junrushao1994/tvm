@@ -69,14 +69,16 @@ def vanilla(n_seq_len=128, n_num_hidden=128, n_input_dim=128, n_batch_size=1):
   x = tvm.placeholder((seq_len, batch_size, input_dim), name="x")
   # Define weight and bias for input projection and hidden state transformation
   w_i2h = tvm.placeholder((1, num_hidden, input_dim), name="w_i2h")
+  b_i2h = tvm.placeholder((1, num_hidden), name="b_i2h")
   w_h2h = tvm.placeholder((1, num_hidden, num_hidden), name="w_h2h")
   b_h2h = tvm.placeholder((1, num_hidden), name="b_h2h")
   # Define hidden state and cell state
   s_h = tvm.placeholder((seq_len, batch_size, num_hidden), name="s_h")
   s_h_init = tvm.compute((1, batch_size, num_hidden), lambda *i: 0.0, name="s_h_init")
   # Do the transformation, the bias for input projection can be fused into that of hidden transformation
+  bias = tvm.compute((1, num_hidden), lambda *i: b_i2h(*i) + b_h2h(*i), name="bias")
   l_i2h, k_i2h = _linear(x, w_i2h, None, name="l_i2h")
-  l_h2h, k_h2h = _linear(s_h, w_h2h, b_h2h, name="l_h2h")
+  l_h2h, k_h2h = _linear(s_h, w_h2h, bias, name="l_h2h")
   # Sum up the transformed inputs and previous hidden states
   g = tvm.compute((seq_len, batch_size, 1, num_hidden), lambda *i: l_i2h(*i) + l_h2h(*i), name="g")
   # Computation inside an LSTM cell
@@ -141,6 +143,7 @@ def lstm(n_seq_len=128, n_num_hidden=128, n_input_dim=128, n_batch_size=1):
   x = tvm.placeholder((seq_len, batch_size, input_dim), name="x")
   # Define weight and bias for input projection and hidden state transformation
   w_i2h = tvm.placeholder((4, num_hidden, input_dim), name="w_i2h")
+  b_i2h = tvm.placeholder((4, num_hidden), name="b_i2h")
   w_h2h = tvm.placeholder((4, num_hidden, num_hidden), name="w_h2h")
   b_h2h = tvm.placeholder((4, num_hidden), name="b_h2h")
   # Define hidden state and cell state
@@ -149,8 +152,9 @@ def lstm(n_seq_len=128, n_num_hidden=128, n_input_dim=128, n_batch_size=1):
   s_h_init = tvm.compute((1, batch_size, num_hidden), lambda *i: 0.0, name="s_h_init")
   s_c_init = tvm.compute((1, batch_size, num_hidden), lambda *i: 0.0, name="s_c_init")
   # Do the transformation, the bias for input projection can be fused into that of hidden transformation
+  bias = tvm.compute((1, num_hidden), lambda *i: b_i2h(*i) + b_h2h(*i), name="bias")
   l_i2h, k_i2h = _linear(x, w_i2h, None, name="l_i2h")
-  l_h2h, k_h2h = _linear(s_h, w_h2h, b_h2h, name="l_h2h")
+  l_h2h, k_h2h = _linear(s_h, w_h2h, bias, name="l_h2h")
   # Sum up the transformed inputs and previous hidden states
   g = tvm.compute((seq_len, batch_size, 4, num_hidden), lambda *i: l_i2h(*i) + l_h2h(*i), name="g")
   # Computation inside an LSTM cell
