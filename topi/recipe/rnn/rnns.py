@@ -101,16 +101,16 @@ def _linear(x, num_gemm, num_hidden, name, **kwargs):
       # s[bS].set_store_predicate(tid_x.equal(0))
     def _mm(bid_x, tid_x, n_tx, n_bx, **kwargs):
       s[f].compute_inline()
-      k, = s[g].op.reduce_axis
-      ko, _ki = s[g].split(k, nparts=n_tx)
-      rf = s.rfactor(g, ko)
-      k, = s[g].op.reduce_axis
-      s[rf].compute_at(s[g], k)
+      # k, = s[g].op.reduce_axis
+      # ko, _ki = s[g].split(k, nparts=n_tx)
+      # rf = s.rfactor(g, ko)
+      # k, = s[g].op.reduce_axis
+      # s[rf].compute_at(s[g], k)
+      # tx, = s[g].op.reduce_axis
+      # s[g].bind(tx, tid_x)
       # _t, c, _n, _a = s[g].op.axis
       # bx, _ci = s[g].split(c, nparts=n_bx)
-      tx, = s[g].op.reduce_axis
       # s[g].bind(bx, bid_x)
-      s[g].bind(tx, tid_x)
     _w(**kwargs)
     _b(**kwargs)
     _mm(**kwargs)
@@ -120,8 +120,7 @@ def _linear(x, num_gemm, num_hidden, name, **kwargs):
 def _update_state(x, seq_len, batch_size, num_hidden, name, **kwargs):
   u = tvm.compute((seq_len, batch_size, num_hidden), lambda t, n, c: x[t, c, n], name=name)
   def sch(s, n_bx, bid_x, tid_x, **kwargs):
-    print(u)
-    # s[x].compute_inline()
+    s[x].compute_inline()
     _t, _n, c = s[u].op.axis
     bx, _ci = s[u].split(c, nparts=n_bx)
     # s[u].bind(bx, bid_x)
