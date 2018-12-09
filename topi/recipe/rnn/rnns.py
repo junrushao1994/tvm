@@ -39,7 +39,7 @@ def _input(seq_len, batch_size, input_dim, name, **kwargs):
     s[xL].compute_at(s[scan], s[scan].op.scan_axis)
     _t, _n, c = s[xL].op.axis
     _co, tx = s[xL].split(c, factor=n_tx)
-    # s[xL].bind(tx, tid_x)
+    s[xL].bind(tx, tid_x)
     if DOUBLE_BUFFER:
       s[xL].double_buffer()
   return (x, ), sch
@@ -57,14 +57,14 @@ def _state(seq_len, batch_size, num_hidden, name, **kwargs):
       s[sS].compute_at(s[scan], s[scan].op.scan_axis)
       _t, _n, c = s[sS].op.axis
       _co, tx = s[sS].split(c, factor=n_tx)
-      # s[sS].bind(tx, tid_x)
+      s[sS].bind(tx, tid_x)
       if DOUBLE_BUFFER:
         s[sS].double_buffer()
     def _s_init(n_bx, tid_x, bid_x, **kwargs):
       _1, _n, c = s[s_init].op.axis
       bx, _ci = s[s_init].split(c, nparts=n_bx)
       s[s_init].bind(bx, bid_x)
-      # s[s_init].set_store_predicate(tid_x.equal(0))
+      s[s_init].set_store_predicate(tid_x.equal(0))
     _state(**kwargs)
     _s_init(**kwargs)
   return (state, s_init), sch
@@ -90,7 +90,7 @@ def _linear(x, num_gemm, num_hidden, name, **kwargs):
       bx, _ci = s[wS].split(c, nparts=n_bx)
       tx, _ii = s[wS].split(i, nparts=n_tx)
       s[wS].bind(bx, bid_x)
-      # s[wS].bind(tx, tid_x)
+      s[wS].bind(tx, tid_x)
     def _b(bid_x, tid_x, n_bx, **kwargs):
       # b[c, a]
       bS = s.cache_read(b, "shared", readers=[f])
@@ -98,18 +98,20 @@ def _linear(x, num_gemm, num_hidden, name, **kwargs):
       c, _a = s[bS].op.axis
       bx, _ci = s[bS].split(c, nparts=n_bx)
       s[bS].bind(bx, bid_x)
-      # s[bS].set_store_predicate(tid_x.equal(0))
-    def _mm(bid_x, tid_x, n_tx, n_bx, **kwargs):
+      s[bS].set_store_predicate(tid_x.equal(0))
+    def _mm(bid_x, tid_x, n_tx, n_bx, at, **kwargs):
       s[f].compute_inline()
-      # k, = s[g].op.reduce_axis
-      # ko, _ki = s[g].split(k, nparts=n_tx)
-      # rf = s.rfactor(g, ko)
-      # k, = s[g].op.reduce_axis
-      # s[rf].compute_at(s[g], k)
-      # tx, = s[g].op.reduce_axis
-      # s[g].bind(tx, tid_x)
-      # _t, c, _n, _a = s[g].op.axis
-      # bx, _ci = s[g].split(c, nparts=n_bx)
+      k, = s[g].op.reduce_axis
+      ko, _ki = s[g].split(k, nparts=n_tx)
+      rf = s.rfactor(g, ko)
+      k, = s[g].op.reduce_axis
+      s[rf].compute_at(s[g], k)
+      tx, = s[g].op.reduce_axis
+      s[g].bind(tx, tid_x)
+      _t, c, _n, _a = s[g].op.axis
+      bx, _ci = s[g].split(c, nparts=n_bx)
+      # s[g].compute_inline()
+      # at(s[g])
       # s[g].bind(bx, bid_x)
     _w(**kwargs)
     _b(**kwargs)
@@ -177,9 +179,9 @@ def vanilla(n_seq_len=128, n_num_hidden=128, n_input_dim=128, n_batch_size=1):
   # do the scheduling
   sch_x_i(s, scan=scan_h, readers=[g_i2h], **sch_cfg)
   sch_s_h(s, scan=scan_h, readers=[g_h2h], **sch_cfg)
-  sch_i2h(s, scan=scan_h, **sch_cfg)
-  sch_h2h(s, scan=scan_h, **sch_cfg)
   sch_u_h(s, **sch_cfg)
+  sch_i2h(s, scan=scan_h, at=None, **sch_cfg)
+  sch_h2h(s, scan=scan_h, at=None, **sch_cfg)
   print(lower())
   return
 
