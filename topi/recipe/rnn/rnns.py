@@ -8,11 +8,10 @@ import numpy as np
 TASK="rnn"
 DOUBLE_BUFFER = False
 USE_MANUAL_CODE = False
-DETECT_GLOBAL_BARRIER = False
+DETECT_GLOBAL_BARRIER = True
 NUM_SM = 80   # 80 streaming processors in V100
 
 NUM_THREAD_X = 32
-BOUND = True
 
 
 @tvm.register_func
@@ -40,8 +39,7 @@ def _input(seq_len, batch_size, input_dim, name, **kwargs):
     s[xL].compute_at(s[scan], s[scan].op.scan_axis)
     _t, _n, c = s[xL].op.axis
     _co, tx = s[xL].split(c, factor=n_tx)
-    if BOUND:
-      s[xL].bind(tx, tid_x)
+    # s[xL].bind(tx, tid_x)
     if DOUBLE_BUFFER:
       s[xL].double_buffer()
   return (x, ), sch
@@ -59,16 +57,14 @@ def _state(seq_len, batch_size, num_hidden, name, **kwargs):
       s[sS].compute_at(s[scan], s[scan].op.scan_axis)
       _t, _n, c = s[sS].op.axis
       _co, tx = s[sS].split(c, factor=n_tx)
-      if BOUND:
-        s[sS].bind(tx, tid_x)
+      # s[sS].bind(tx, tid_x)
       if DOUBLE_BUFFER:
         s[sS].double_buffer()
     def _s_init(n_bx, tid_x, bid_x, **kwargs):
       _1, _n, c = s[s_init].op.axis
       bx, _ci = s[s_init].split(c, nparts=n_bx)
-      if BOUND:
-        s[s_init].bind(bx, bid_x)
-        s[s_init].set_store_predicate(tid_x.equal(0))
+      s[s_init].bind(bx, bid_x)
+      # s[s_init].set_store_predicate(tid_x.equal(0))
     _state(**kwargs)
     _s_init(**kwargs)
   return (state, s_init), sch
@@ -93,31 +89,29 @@ def _linear(x, num_gemm, num_hidden, name, **kwargs):
       c, _a, i = s[wS].op.axis
       bx, _ci = s[wS].split(c, nparts=n_bx)
       tx, _ii = s[wS].split(i, nparts=n_tx)
-      if BOUND:
-        s[wS].bind(bx, bid_x)
-        s[wS].bind(tx, tid_x)
+      s[wS].bind(bx, bid_x)
+      # s[wS].bind(tx, tid_x)
     def _b(bid_x, tid_x, n_bx, **kwargs):
       # b[c, a]
       bS = s.cache_read(b, "shared", readers=[f])
       s[bS].compute_at(s[scan], tid_x)
       c, _a = s[bS].op.axis
       bx, _ci = s[bS].split(c, nparts=n_bx)
-      if BOUND:
-        s[bS].bind(bx, bid_x)
-        s[bS].set_store_predicate(tid_x.equal(0))
+      s[bS].bind(bx, bid_x)
+      # s[bS].set_store_predicate(tid_x.equal(0))
     def _mm(bid_x, tid_x, n_tx, n_bx, **kwargs):
       s[f].compute_inline()
-      k, = s[g].op.reduce_axis
-      ko, _ki = s[g].split(k, nparts=n_tx)
-      rf = s.rfactor(g, ko)
-      k, = s[g].op.reduce_axis
-      s[rf].compute_at(s[g], k)
-      _t, c, _n, _a = s[g].op.axis
-      bx, _ci = s[g].split(c, nparts=n_bx)
-      if BOUND:
-        tx, = s[g].op.reduce_axis
-        s[g].bind(bx, bid_x)
-        s[g].bind(tx, tid_x)
+      pass
+      # k, = s[g].op.reduce_axis
+      # ko, _ki = s[g].split(k, nparts=n_tx)
+      # rf = s.rfactor(g, ko)
+      # k, = s[g].op.reduce_axis
+      # s[rf].compute_at(s[g], k)
+      # _t, c, _n, _a = s[g].op.axis
+      # bx, _ci = s[g].split(c, nparts=n_bx)
+      # tx, = s[g].op.reduce_axis
+      # s[g].bind(bx, bid_x)
+      # s[g].bind(tx, tid_x)
     _w(**kwargs)
     _b(**kwargs)
     _mm(**kwargs)
@@ -125,14 +119,14 @@ def _linear(x, num_gemm, num_hidden, name, **kwargs):
 
 
 def _update_state(x, seq_len, batch_size, num_hidden, name, **kwargs):
-  u = tvm.compute((seq_len, batch_size, num_hidden), lambda t, n, c: x[t, n, c], name=name)
+  u = tvm.compute((seq_len, batch_size, num_hidden), lambda t, n, c: x[t, c, n], name=name)
   def sch(s, n_bx, bid_x, tid_x, **kwargs):
-    s[x].compute_inline()
+    print(u)
+    # s[x].compute_inline()
     _t, _n, c = s[u].op.axis
     bx, _ci = s[u].split(c, nparts=n_bx)
-    if BOUND:
-      s[u].bind(bx, bid_x)
-    s[u].set_store_predicate(tid_x.equal(0))
+    # s[u].bind(bx, bid_x)
+    # s[u].set_store_predicate(tid_x.equal(0))
   return (u, ), sch
 
 
@@ -160,7 +154,7 @@ def vanilla(n_seq_len=128, n_num_hidden=128, n_input_dim=128, n_batch_size=1):
   (l_i2h, g_i2h, w_i2h, b_i2h), sch_i2h = _linear(x_i, name="l_i2h", **config)
   (l_h2h, g_h2h, w_h2h, b_h2h), sch_h2h = _linear(s_h, name="l_h2h", **config)
   # Computation inside the RNN cell
-  n_h = tvm.compute((seq_len, batch_size, num_hidden), lambda t, n, c: tvm.tanh(l_i2h[t, c, n, 0] + l_h2h[t, c, n, 0]), name="n_h")
+  n_h = tvm.compute((seq_len, num_hidden, batch_size), lambda t, c, n: tvm.tanh(l_i2h[t, c, n, 0] + l_h2h[t, c, n, 0]), name="n_h")
   # Define update rules explicitly
   (u_h, ), sch_u_h = _update_state(n_h, name="u_h", **config)
   # Finally, define the scanning itself
@@ -189,9 +183,9 @@ def vanilla(n_seq_len=128, n_num_hidden=128, n_input_dim=128, n_batch_size=1):
   sch_h2h(s, scan=scan_h, **sch_cfg)
   sch_u_h(s, **sch_cfg)
   print(lower())
+  return
 
-  def check_device(target="cuda"):
-    assert target == "cuda"
+  def check_device(target="cuda -arch=sm_70 -O3"):
     frnn = tvm.build(s, [w_i2h, b_i2h, w_h2h, b_h2h, x_i, scan_h], target)
     ctx = tvm.gpu(0)
     # prepare data
