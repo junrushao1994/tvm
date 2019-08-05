@@ -33,6 +33,20 @@ namespace relay {
 using tvm::IRPrinter;
 using namespace runtime;
 
+static FuncType ExtractFuncType(const Function &func) {
+  Array<Type> param_types;
+  for (auto param : func->params) {
+    if (!param->type_annotation.defined()) {
+      return NullValue<FuncType>();
+    }
+    param_types.push_back(param->type_annotation);
+  }
+  if (!func->ret_type.defined()) {
+    return NullValue<FuncType>();
+  }
+  return FuncTypeNode::make(param_types, func->ret_type, func->type_params, {});
+}
+
 Module ModuleNode::make(tvm::Map<GlobalVar, Function> global_funcs,
                         tvm::Map<GlobalTypeVar, TypeData> global_type_defs) {
   auto n = make_node<ModuleNode>();
@@ -130,6 +144,9 @@ void ModuleNode::Add(const GlobalVar& var,
                        func->ret_type,
                        concat(func->type_params, ftv),
                        func->attrs);
+  if (auto func_type = ExtractFuncType(func); func_type.defined()) {
+    func->checked_type_ = func_type;
+  }
   // Type check the item before we add it to the module.
   Function checked_func = InferType(func, mod, var);
   auto type = checked_func->checked_type();
