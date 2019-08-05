@@ -50,6 +50,11 @@ static FuncType ExtractFuncType(const Function &func) {
 Module ModuleNode::make(tvm::Map<GlobalVar, Function> global_funcs,
                         tvm::Map<GlobalTypeVar, TypeData> global_type_defs) {
   auto n = make_node<ModuleNode>();
+  for (auto &pair : global_funcs) {
+    if (auto func_type = ExtractFuncType(pair.second); func_type.defined()) {
+      pair.second->checked_type_ = func_type;
+    }
+  }
   n->functions = std::move(global_funcs);
   n->type_definitions = std::move(global_type_defs);
 
