@@ -110,17 +110,17 @@ class NodeIndexer : public AttrVisitor {
       }
     } else if (node->IsInstance<MapNode>()) {
       MapNode* n = static_cast<MapNode*>(node);
-      bool is_str_map = std::all_of(n->data.begin(), n->data.end(), [](const auto& v) {
-        return v.first->template IsInstance<StringObj>();
+      bool is_str_map = std::all_of(n->begin(), n->end(), [](const auto& v) {
+        return v.k->template IsInstance<StringObj>();
       });
       if (is_str_map) {
-        for (const auto& kv : n->data) {
-          MakeIndex(const_cast<Object*>(kv.second.get()));
+        for (const auto& kv : *n) {
+          MakeIndex(const_cast<Object*>(kv.v.get()));
         }
       } else {
-        for (const auto& kv : n->data) {
-          MakeIndex(const_cast<Object*>(kv.first.get()));
-          MakeIndex(const_cast<Object*>(kv.second.get()));
+        for (const auto& kv : *n) {
+          MakeIndex(const_cast<Object*>(kv.k.get()));
+          MakeIndex(const_cast<Object*>(kv.v.get()));
         }
       }
     } else {
@@ -253,18 +253,18 @@ class JSONAttrGetter : public AttrVisitor {
       }
     } else if (node->IsInstance<MapNode>()) {
       MapNode* n = static_cast<MapNode*>(node);
-      bool is_str_map = std::all_of(n->data.begin(), n->data.end(), [](const auto& v) {
-        return v.first->template IsInstance<StringObj>();
+      bool is_str_map = std::all_of(n->begin(), n->end(), [](const auto& v) {
+        return v.k->template IsInstance<StringObj>();
       });
       if (is_str_map) {
-        for (const auto& kv : n->data) {
-          node_->keys.push_back(Downcast<String>(kv.first));
-          node_->data.push_back(node_index_->at(const_cast<Object*>(kv.second.get())));
+        for (const auto& kv : *n) {
+          node_->keys.push_back(Downcast<String>(kv.k));
+          node_->data.push_back(node_index_->at(const_cast<Object*>(kv.v.get())));
         }
       } else {
-        for (const auto& kv : n->data) {
-          node_->data.push_back(node_index_->at(const_cast<Object*>(kv.first.get())));
-          node_->data.push_back(node_index_->at(const_cast<Object*>(kv.second.get())));
+        for (const auto& kv : *n) {
+          node_->data.push_back(node_index_->at(const_cast<Object*>(kv.k.get())));
+          node_->data.push_back(node_index_->at(const_cast<Object*>(kv.v.get())));
         }
       }
     } else {
@@ -340,13 +340,13 @@ class JSONAttrSetter : public AttrVisitor {
       if (node_->keys.empty()) {
         CHECK_EQ(node_->data.size() % 2, 0U);
         for (size_t i = 0; i < node_->data.size(); i += 2) {
-          n->data[ObjectRef(node_list_->at(node_->data[i]))] =
+          (*n)[ObjectRef(node_list_->at(node_->data[i]))] =
               ObjectRef(node_list_->at(node_->data[i + 1]));
         }
       } else {
         CHECK_EQ(node_->data.size(), node_->keys.size());
         for (size_t i = 0; i < node_->data.size(); ++i) {
-          n->data[String(node_->keys[i])] = ObjectRef(node_list_->at(node_->data[i]));
+          (*n)[String(node_->keys[i])] = ObjectRef(node_list_->at(node_->data[i]));
         }
       }
     } else {

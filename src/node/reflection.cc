@@ -234,9 +234,9 @@ ObjectRef ReflectionVTable::CreateObject(const std::string& type_key,
   runtime::TVMArgsSetter setter(values.data(), tcodes.data());
   int index = 0;
 
-  for (auto& kv : static_cast<const MapNode*>(kwargs.get())->data) {
-    setter(index, Downcast<String>(kv.first).c_str());
-    setter(index + 1, kv.second);
+  for (const auto& kv : *static_cast<const MapNode*>(kwargs.get())) {
+    setter(index, Downcast<String>(kv.k).c_str());
+    setter(index + 1, kv.v);
     index += 2;
   }
 

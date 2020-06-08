@@ -95,6 +95,7 @@ def config_cython():
                 include_dirs=["../include/",
                               "../3rdparty/dmlc-core/include",
                               "../3rdparty/dlpack/include",
+                              "../3rdparty/compiler-rt",
                 ],
                 extra_compile_args=["-std=c++14"],
                 library_dirs=library_dirs,

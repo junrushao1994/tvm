@@ -310,7 +310,7 @@ TEST(Map, Mutate) {
   CHECK(it != dict.end() && (*it).second.same_as(x));
 
   it = dict2.find(zz);
-  CHECK(it == dict.end());
+  CHECK(it == dict2.end());
 
   LOG(INFO) << dict;
 }

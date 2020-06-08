@@ -24,6 +24,7 @@ set(CMAKE_CURRENT_BINARY_DIR ${TVM_ROOT}/build)
 
 include_directories(${TVM_ROOT}/3rdparty/dlpack/include/)
 include_directories(${TVM_ROOT}/3rdparty/dmlc-core/include/)
+include_directories(${TVM_ROOT}/3rdparty/compiler-rt/)
 include_directories(${TVM_ROOT}/include)
 
 link_directories(${TVM_ROOT}/build)

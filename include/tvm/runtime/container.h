@@ -25,6 +25,7 @@
 #define TVM_RUNTIME_CONTAINER_H_
 
 #include <dmlc/logging.h>
+#include <int_lib.h>
 #include <tvm/runtime/memory.h>
 #include <tvm/runtime/object.h>
 #include <tvm/runtime/packed_func.h>
@@ -34,6 +35,7 @@
 #include <initializer_list>
 #include <memory>
 #include <string>
+#include <unordered_map>
 // We use c++14 std::experimental::string_view for optimizing hash computation
 // only right now, its usage is limited in this file. Any broader usage of
 // std::experiment in our core codebase is discouraged and needs community
@@ -66,10 +68,28 @@
 #include <vector>
 
 namespace tvm {
-
-struct ObjectEqual;
-
 namespace runtime {
+
+/*! \brief String-aware ObjectRef equal functor */
+struct ObjectHash {
+  /*!
+   * \brief Calculate the hash code of an ObjectRef
+   * \param a The given ObjectRef
+   * \return Hash code of a, string hash for strings and pointer address otherwise.
+   */
+  size_t operator()(const ObjectRef& a) const;
+};
+
+/*! \brief String-aware ObjectRef hash functor */
+struct ObjectEqual {
+  /*!
+   * \brief Check if the two ObjectRef are equal
+   * \param a One ObjectRef
+   * \param b The other ObjectRef
+   * \return String equality if both are strings, pointer address equality otherwise.
+   */
+  bool operator()(const ObjectRef& a, const ObjectRef& b) const;
+};
 
 /*!
  * \brief Base template for classes with array like memory layout.
@@ -204,7 +224,7 @@ class IterAdapter {
   using difference_type = typename std::iterator_traits<TIter>::difference_type;
   using value_type = typename Converter::ResultType;
   using pointer = typename Converter::ResultType*;
-  using reference = typename Converter::ResultType&;  // NOLINT(*)
+  using reference = typename Converter::ResultType&;
   using iterator_category = typename std::iterator_traits<TIter>::iterator_category;
 
   explicit IterAdapter(TIter iter) : iter_(iter) {}
@@ -216,12 +236,12 @@ class IterAdapter {
     --iter_;
     return *this;
   }
-  IterAdapter& operator++(int) {
+  IterAdapter operator++(int) {
     IterAdapter copy = *this;
     ++iter_;
     return copy;
   }
-  IterAdapter& operator--(int) {
+  IterAdapter operator--(int) {
     IterAdapter copy = *this;
     --iter_;
     return copy;
@@ -1346,7 +1366,7 @@ class String : public ObjectRef {
    */
   static int memncmp(const char* lhs, const char* rhs, size_t lhs_count, size_t rhs_count);
 
-  friend struct tvm::ObjectEqual;
+  friend struct tvm::runtime::ObjectEqual;
 };
 
 /*! \brief An object representing string moved from std::string. */
@@ -1405,6 +1425,25 @@ inline int String::memncmp(const char* lhs, const char* rhs, size_t lhs_count, s
   } else {
     return 0;
   }
+}
+
+inline size_t ObjectHash::operator()(const ObjectRef& a) const {
+  if (const auto* str = a.as<StringObj>()) {
+    return String::HashBytes(str->data, str->size);
+  }
+  return ObjectPtrHash()(a);
+}
+
+inline bool ObjectEqual::operator()(const ObjectRef& a, const ObjectRef& b) const {
+  if (a.same_as(b)) {
+    return true;
+  }
+  if (const auto* str_a = a.as<StringObj>()) {
+    if (const auto* str_b = b.as<StringObj>()) {
+      return String::memncmp(str_a->data, str_b->data, str_a->size, str_b->size) == 0;
+    }
+  }
+  return false;
 }
 
 template <>
@@ -1552,6 +1591,954 @@ struct PackedFuncValueConverter<Optional<T>> {
     if (val.type_code() == kTVMNullptr) return Optional<T>(nullptr);
     return PackedFuncValueConverter<T>::From(val);
   }
+};
+
+/*! \brief map node content */
+class MapNode : public Object {
+  /*! \brief The number of elements in a memory block */
+  static constexpr int kBlockCap = 16;
+  /*! \brief Maximum load factor of the hash map */
+  static constexpr double kMaxLoadFactor = 0.99;
+  /*! \brief Binary representation of the metadata of an empty slot */
+  static constexpr uint8_t kEmptySlot = uint8_t(0b11111111);
+  /*! \brief Binary representation of the metadata of a protected slot */
+  static constexpr uint8_t kProtectedSlot = uint8_t(0b11111110);
+  /*! \brief Number of probing choices available */
+  static constexpr int kNumJumpDists = 126;
+  /* clang-format off */
+  /*! \brief Candidates of probing distance */
+  TVM_DLL static constexpr uint64_t kJumpDists[kNumJumpDists] {
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+    // Quadratic probing with triangle numbers. See also:
+    // 1) https://en.wikipedia.org/wiki/Quadratic_probing
+    // 2) https://fgiesen.wordpress.com/2015/02/22/triangular-numbers-mod-2n/
+    // 3) https://github.com/skarupke/flat_hash_map
+    21, 28, 36, 45, 55, 66, 78, 91, 105, 120,
+    136, 153, 171, 190, 210, 231, 253, 276, 300, 325,
+    351, 378, 406, 435, 465, 496, 528, 561, 595, 630,
+    666, 703, 741, 780, 820, 861, 903, 946, 990, 1035,
+    1081, 1128, 1176, 1225, 1275, 1326, 1378, 1431, 1485, 1540,
+    1596, 1653, 1711, 1770, 1830, 1891, 1953, 2016, 2080, 2145,
+    2211, 2278, 2346, 2415, 2485, 2556, 2628,
+    // larger triangle numbers
+    8515, 19110, 42778, 96141, 216153,
+    486591, 1092981, 2458653, 5532801, 12442566,
+    27993903, 62983476, 141717030, 318844378, 717352503,
+    1614057336, 3631522476, 8170957530, 18384510628, 41364789378,
+    93070452520, 209408356380, 471168559170, 1060128894105, 2385289465695,
+    5366898840628, 12075518705635, 27169915244790, 61132312065111, 137547689707000,
+    309482283181501, 696335127828753, 1566753995631385, 3525196511162271, 7931691992677701,
+    17846306936293605, 40154190677507445, 90346928918121501, 203280589587557251, 457381325854679626,
+    1029107982097042876, 2315492959180353330, 5209859154120846435,
+  };
+  /* clang-format on */
+
+ public:
+  /*! \brief Type of the keys in the hash map */
+  using key_type = ObjectRef;
+  /*! \brief Type of the values in the hash map */
+  using mapped_type = ObjectRef;
+
+  static constexpr const uint32_t _type_index = TypeIndex::kRuntimeMap;
+  static constexpr const char* _type_key = "Map";
+  TVM_DECLARE_FINAL_OBJECT_INFO(MapNode, Object);
+
+ private:
+  struct KVType;
+  struct Block;
+  struct ListNode;
+
+ public:
+  class iterator;
+
+  /*!
+   * \brief Destroy the MapNode
+   */
+  ~MapNode() { this->Reset(); }
+
+  /*!
+   * \brief Number of elements in the MapNode
+   * \return The result
+   */
+  size_t size() const { return size_; }
+
+  /*!
+   * \brief Index value associated with a key, create new entry if the key does not exist
+   * \param key The indexing key
+   * \return The mutable reference to the value
+   */
+  mapped_type& operator[](const key_type& key) { return Emplace(key, mapped_type()).Val(); }
+
+  /*!
+   * \brief Count the number of times a key exists in the MapNode
+   * \param key The indexing key
+   * \return The result, 0 or 1
+   */
+  size_t count(const key_type& key) const { return !Search(key).IsNone(); }
+
+  /*!
+   * \brief Index value associated with a key, throw exception if the key does not exist
+   * \param key The indexing key
+   * \return The const reference to the value
+   */
+  const mapped_type& at(const key_type& key) const { return At(key); }
+
+  /*!
+   * \brief Index value associated with a key, throw exception if the key does not exist
+   * \param key The indexing key
+   * \return The mutable reference to the value
+   */
+  mapped_type& at(const key_type& key) { return At(key); }
+
+  /*! \return begin iterator */
+  iterator begin() const { return size_ == 0 ? iterator() : iterator(0, this); }
+
+  /*! \return end iterator */
+  iterator end() const { return size_ == 0 ? iterator() : iterator(slots_ + 1, this); }
+
+  /*!
+   * \brief Index value associated with a key
+   * \param key The indexing key
+   * \return The iterator of the entry associated with the key, end iterator if not exists
+   */
+  iterator find(const key_type& key) const {
+    ListNode n = Search(key);
+    return n.IsNone() ? end() : iterator(n.i, this);
+  }
+
+  /*!
+   * \brief Insert and construct in-place with the given args, do nothing if key already exists
+   * \tparam Args Type of the args forwarded to the constructor
+   */
+  template <typename... Args>
+  void emplace(Args&&... args) {
+    Emplace(std::forward<Args>(args)...);
+  }
+
+  /*!
+   * \brief Erase the entry associated with the key, do nothing if not exists
+   * \param key The indexing key
+   */
+  void erase(const key_type& key) { Erase(key); }
+
+  /*!
+   * \brief Erase the entry associated with the iterator
+   * \param position The iterator
+   */
+  void erase(const iterator& position) {
+    uint64_t i = position.i;
+    if (position.self != nullptr && i <= this->slots_) {
+      Erase(ListNode(i, this));
+    }
+  }
+
+ private:
+  /*!
+   * \brief reset the array to content from iterator.
+   * \param first begin of iterator
+   * \param last end of iterator
+   * \tparam IterType The type of iterator
+   */
+  template <typename IterType>
+  void Assign(IterType first, IterType last) {
+    int64_t cap = std::distance(first, last);
+    this->ReleaseItems();
+    this->Reserve(cap);
+    for (; first != last; ++first) {
+      this->Emplace(*first);
+    }
+  }
+
+  /*!
+   * \brief Search for the given key
+   * \param key The key
+   * \return ListNode that associated with the key
+   */
+  ListNode Search(const key_type& key) const {
+    if (this->size_ == 0) {
+      return ListNode();
+    }
+    for (ListNode n = ListNode::GetHead(ObjectHash()(key), this); !n.IsNone(); n.MoveToNext(this)) {
+      if (ObjectEqual()(key, n.Key())) {
+        return n;
+      }
+    }
+    return ListNode();
+  }
+
+  /*!
+   * \brief Search for the given key, throw exception if not exists
+   * \param key The key
+   * \return ListNode that associated with the key
+   */
+  mapped_type& At(const key_type& key) const {
+    ListNode n = Search(key);
+    CHECK(!n.IsNone()) << "IndexError: key is not in Map";
+    return n.Val();
+  }
+
+  /*!
+   * \brief In-place construct an entry, or do nothing if already exists
+   * \tparam Item Type of arguments forwarded to the constructor
+   * \param arg Arguments fed to the constructor
+   * \return ListNode that associated with the key, no matter whether it already exists
+   */
+  template <typename Item>
+  ListNode Emplace(Item&& arg) {
+    KVType item(std::forward<Item>(arg));
+    return Emplace(std::move(item.k), std::move(item.v));
+  }
+
+  /*!
+   * \brief In-place construct an entry, or do nothing if already exists
+   * \tparam Key Type of the key
+   * \tparam Args Type of the rest of the arguments fed to the constructor
+   * \param key The indexing key
+   * \param args Other arguments
+   * \return ListNode that associated with the key, no matter whether it already exists
+   */
+  template <typename Key, typename... Args>
+  ListNode Emplace(Key&& key, Args&&... args) {
+    ReHashIfNone();
+    // required that `m` to be the head of a linked list through which we can iterator
+    ListNode m = ListNode::FromHash(ObjectHash()(key), this);
+    // `m` can be: 1) empty; 2) body of an irrelevant list; 3) head of the relevant list
+    // Case 1: empty
+    if (m.IsEmpty()) {
+      KVType v(std::forward<Key>(key), std::forward<Args>(args)...);
+      m.NewHead(std::move(v));
+      this->size_ += 1;
+      return m;
+    }
+    // Case 2: body of an irrelevant list
+    if (!m.IsHead()) {
+      // we move the elements around and construct the single-elements linked list
+      return SpareListHead(std::move(m), std::forward<Key>(key), std::forward<Args>(args)...);
+    }
+    // Case 3: head of the relevant list
+    // we iterate through the linked list until the end
+    ListNode n = m;
+    do {
+      // find equal item, do not insert
+      if (ObjectEqual()(key, n.Key())) {
+        return n;
+      }
+      // make sure `m` is the previous element of `n`
+      m = n;
+    } while (n.MoveToNext(this));
+    // `m` is the tail of the linked list
+    // always check capacity before insertion
+    if (ReHashIfFull()) {
+      return Emplace(std::forward<Key>(key), std::forward<Args>(args)...);
+    }
+    uint8_t jump;
+    ListNode empty;
+    // rehash if there is no empty space after `m`
+    if (ReHashIfNoNextEmpty(m, &empty, &jump)) {
+      return Emplace(std::forward<Key>(key), std::forward<Args>(args)...);
+    }
+    KVType v(std::forward<Key>(key), std::forward<Args>(args)...);
+    empty.NewTail(std::move(v));
+    // link `n` to `empty`, and move forward
+    m.SetJump(jump);
+    this->size_ += 1;
+    return empty;
+  }
+
+  /*!
+   * \brief Spare an entry to be the head of a linked list
+   * \tparam Args Type of the arguments fed to the constructor
+   * \param n The given entry to be spared
+   * \param args The arguments
+   * \return ListNode that associated with the head
+   */
+  template <typename... Args>
+  ListNode SpareListHead(ListNode n, Args&&... args) {
+    // `n` is not the head of the linked list
+    // move the original item of `n` (if any)
+    // and construct new item on the position `n`
+    if (ReHashIfFull()) {
+      // always check capacity before insertion
+      return Emplace(std::forward<Args>(args)...);
+    }
+    // To make `n` empty, we
+    // 1) find `w` the previous element of `n` in the linked list
+    // 2) copy the linked list starting from `r = n`
+    // 3) paste them after `w`
+    // read from the linked list after `r`
+    ListNode r = n;
+    // write to the tail of `w`
+    ListNode w = n.GetPrev(this);
+    // after `n` is moved, we disallow writing to the slot
+    bool is_first = true;
+    uint8_t r_meta, jump;
+    ListNode empty;
+    do {
+      // `jump` describes how `w` is jumped to `empty`
+      // rehash if there is no empty space after `w`
+      if (ReHashIfNoNextEmpty(w, &empty, &jump)) {
+        return Emplace(std::forward<Args>(args)...);
+      }
+      // move `r` to `empty`
+      empty.NewTail(std::move(r.Data()));
+      // clear the metadata of `r`
+      r_meta = r.Meta();
+      if (is_first) {
+        is_first = false;
+        r.SetProtected();
+      } else {
+        r.SetEmpty();
+      }
+      // link `w` to `empty`, and move forward
+      w.SetJump(jump);
+      w = empty;
+      // move `r` forward as well
+    } while (r.MoveToNext(this, r_meta));
+    // finally we have done moving the linked list
+    // fill data_ into `n`
+    KVType v(std::forward<Args>(args)...);
+    n.NewHead(std::move(v));
+    this->size_ += 1;
+    return n;
+  }
+
+  /*!
+   * \brief Remove a ListNode
+   * \param n The node to be removed
+   */
+  void Erase(const ListNode& n) {
+    this->size_ -= 1;
+    if (!n.HasNext()) {
+      // `n` is the last
+      if (!n.IsHead()) {
+        // cut the link if there is any
+        n.GetPrev(this).SetJump(0);
+      }
+      n.Data().KVType::~KVType();
+      n.SetEmpty();
+    } else {
+      ListNode last = n, prev = n;
+      for (last.MoveToNext(this); last.HasNext(); prev = last, last.MoveToNext(this)) {
+      }
+      n.Data() = std::move(last.Data());
+      last.SetEmpty();
+      prev.SetJump(0);
+    }
+  }
+
+  /*!
+   * \brief Remove an entry associated with the given key
+   * \param key The node to be removed
+   */
+  void Erase(const key_type& key) {
+    ListNode n = Search(key);
+    if (!n.IsNone()) {
+      Erase(n);
+    }
+  }
+
+  /*!
+   * \brief Reserve some space
+   * \param count The space to be reserved
+   */
+  void Reserve(uint64_t count) {
+    if (slots_ < count * 2) {
+      ReHash(count * 2);
+    }
+  }
+
+  /*! \brief Clear the container to empty, release all memory acquired */
+  void Reset() {
+    this->ReleaseItems();
+    delete[] data_;
+    data_ = nullptr;
+    slots_ = 0;
+    size_ = 0;
+    fib_ = 63;
+  }
+
+  /*! \brief Clear the container to empty, release all entries */
+  void ReleaseItems() {
+    uint64_t n_blocks = CalcNumBlocks(this->slots_);
+    MapNode* m = this;
+    for (uint64_t bi = 0; bi < n_blocks; ++bi) {
+      uint8_t* m_m = m->data_[bi].b;
+      KVType* m_d = reinterpret_cast<KVType*>(m->data_[bi].b + kBlockCap);
+      for (int j = 0; j < kBlockCap; ++j, ++m_m, ++m_d) {
+        uint8_t& meta = *m_m;
+        if (meta != uint8_t(kProtectedSlot) && meta != uint8_t(kEmptySlot)) {
+          meta = uint8_t(kEmptySlot);
+          m_d->KVType::~KVType();
+        }
+      }
+    }
+    this->size_ = 0;
+  }
+
+  /*!
+   * \brief Re-hashing with the given required capacity
+   * \param required The lower bound of capacity required
+   */
+  void ReHash(uint64_t required) {
+    constexpr uint64_t one = 1;
+    uint64_t new_n_slots = static_cast<uint64_t>(required / kMaxLoadFactor) + 1;
+    new_n_slots = std::max(new_n_slots, required);
+    if (new_n_slots <= 0) {
+      return;
+    }
+    uint8_t new_fib = __builtin_clzll(new_n_slots);
+    new_n_slots = one << (64 - new_fib);
+    if (new_n_slots <= slots_ + 1) {
+      return;
+    }
+    ObjectPtr<MapNode> p = MoveFrom(new_fib, new_n_slots, this);
+    std::swap(p->data_, this->data_);
+    std::swap(p->slots_, this->slots_);
+    std::swap(p->size_, this->size_);
+    std::swap(p->fib_, this->fib_);
+  }
+
+  /*!
+   * \brief Re-hashing if the container is empty
+   * \return If re-hashing happens
+   */
+  bool ReHashIfNone() {
+    constexpr uint64_t min_size = 7;
+    if (slots_ == 0) {
+      ReHash(min_size);
+      return true;
+    }
+    return false;
+  }
+
+  /*!
+   * \brief Re-hashing if the container achieves max load factor
+   * \return If re-hashing happens
+   */
+  bool ReHashIfFull() {
+    constexpr uint64_t min_size = 7;
+    if (slots_ == 0 || size_ + 1 > (slots_ + 1) * kMaxLoadFactor) {
+      ReHash(std::max(min_size, size_ + 1));
+      return true;
+    }
+    return false;
+  }
+
+  /*!
+   * \brief Re-hashing if cannot find space for the linked-list
+   * \param n Find the next empty element of this node
+   * \param empty The resulting empty element
+   * \param jump Jump required to the empty element
+   * \return If re-hashing happens
+   */
+  bool ReHashIfNoNextEmpty(const ListNode& n, ListNode* empty, uint8_t* jump) {
+    constexpr uint64_t min_size = 7;
+    *empty = n.GetNextEmpty(this, jump);
+    if (empty->IsNone()) {
+      ReHash(std::max(min_size, slots_ * 2 + 1));
+      return true;
+    }
+    return false;
+  }
+
+ public:
+  /*!
+   * \brief Create an empty container
+   * \return The object created
+   */
+  static ObjectPtr<MapNode> Empty() {
+    ObjectPtr<MapNode> p = make_object<MapNode>();
+    p->data_ = nullptr;
+    p->slots_ = 0;
+    p->size_ = 0;
+    p->fib_ = 63;
+    return p;
+  }
+
+ private:
+  /*!
+   * \brief Create an empty container
+   * \param fib The fib shift provided
+   * \param n_slots Number of slots required
+   * \return The object created
+   */
+  static ObjectPtr<MapNode> Empty(uint8_t fib, uint64_t n_slots) {
+    if (n_slots == 0) {
+      return Empty();
+    }
+    ObjectPtr<MapNode> p = make_object<MapNode>();
+    uint64_t n_blocks = CalcNumBlocks(n_slots - 1);
+    Block* block = p->data_ = new Block[n_blocks];
+    p->slots_ = n_slots - 1;
+    p->size_ = 0;
+    p->fib_ = fib;
+    for (uint64_t i = 0; i < n_blocks; ++i, ++block) {
+      std::fill(block->b, block->b + kBlockCap, uint8_t(kEmptySlot));
+    }
+    return p;
+  }
+
+  /*!
+   * \brief Create an empty container with elements moving from another MapNode
+   * \param fib The fib shift provided
+   * \param n_slots Number of slots required
+   * \param m The source container
+   * \return The object created
+   */
+  static ObjectPtr<MapNode> MoveFrom(uint8_t fib, uint64_t n_slots, MapNode* m) {
+    ObjectPtr<MapNode> p = MapNode::Empty(fib, n_slots);
+    uint64_t n_blocks = CalcNumBlocks(m->slots_);
+    for (uint64_t bi = 0; bi < n_blocks; ++bi) {
+      uint8_t* m_m = m->data_[bi].b;
+      KVType* m_d = reinterpret_cast<KVType*>(m->data_[bi].b + kBlockCap);
+      for (int j = 0; j < kBlockCap; ++j, ++m_m, ++m_d) {
+        uint8_t& meta = *m_m;
+        if (meta != uint8_t(kProtectedSlot) && meta != uint8_t(kEmptySlot)) {
+          meta = uint8_t(kEmptySlot);
+          p->Emplace(std::move(m_d->k), std::move(m_d->v));
+        }
+      }
+    }
+    delete[] m->data_;
+    m->data_ = nullptr;
+    m->slots_ = 0;
+    m->size_ = 0;
+    m->fib_ = 0;
+    return p;
+  }
+
+  /*!
+   * \brief Create an empty container with elements copying from another MapNode
+   * \param m The source container
+   * \return The object created
+   */
+  static ObjectPtr<MapNode> CopyFrom(MapNode* m) {
+    ObjectPtr<MapNode> p = make_object<MapNode>();
+    uint64_t n_blocks = CalcNumBlocks(m->slots_);
+    p->data_ = new Block[n_blocks];
+    p->slots_ = m->slots_;
+    p->size_ = m->size_;
+    p->fib_ = m->fib_;
+    for (uint64_t bi = 0; bi < n_blocks; ++bi) {
+      uint8_t* m_m = m->data_[bi].b;
+      uint8_t* p_m = p->data_[bi].b;
+      KVType* m_d = reinterpret_cast<KVType*>(m->data_[bi].b + kBlockCap);
+      KVType* p_d = reinterpret_cast<KVType*>(p->data_[bi].b + kBlockCap);
+      for (int j = 0; j < kBlockCap; ++j, ++m_m, ++m_d, ++p_m, ++p_d) {
+        uint8_t& meta = *p_m = *m_m;
+        CHECK(meta != kProtectedSlot);
+        if (meta != uint8_t(kEmptySlot)) {
+          new (p_d) KVType(*m_d);
+        }
+      }
+    }
+    return p;
+  }
+
+  static uint64_t CalcNumBlocks(uint64_t n_slots_m1) {
+    uint64_t n_slots = n_slots_m1 > 0 ? n_slots_m1 + 1 : 0;
+    return (n_slots + kBlockCap - 1) / kBlockCap;
+  }
+
+  /*! \brief Alternative to std::pair with standard layout */
+  struct KVType {
+    template <class K, class V>
+    KVType(const K& k, const V& v) : k(k), v(v) {}
+    template <class K, class V>
+    KVType(K&& k, V&& v) : k(std::forward<K>(k)), v(std::forward<V>(v)) {}
+    template <class K, class V>
+    KVType(const K& k, V&& v) : k(k), v(std::forward<V>(v)) {}
+    template <class K, class V>
+    KVType(K&& k, const V& v) : k(std::forward<K>(k)), v(v) {}
+    /*! \brief The STL type */
+    using TStl = std::pair<key_type, mapped_type>;
+    /*! \brief Converting from STL type */
+    KVType(const TStl& kv) : k(kv.first), v(kv.second) {}  // NOLINT(*)
+    /*! \brief Converting to STL type */
+    operator TStl() const { return std::make_pair(k, v); }
+    /*! \brief The key, or std::pair::first */
+    key_type k;
+    /*! \brief The value, or std::pair::second */
+    mapped_type v;
+  };
+
+  /*! \brief POD type of a chunk of memory used to */
+  struct Block {
+    uint8_t b[kBlockCap + kBlockCap * sizeof(KVType)];
+  };
+
+  /*! \brief The implicit in-place linked list used to index a chain */
+  struct ListNode {
+    /*! \brief Construct None */
+    ListNode() : i(0), cur(nullptr) {}
+    /*! \brief Construct from position */
+    ListNode(uint64_t i, const MapNode* self) : i(i), cur(self->data_ + (i / kBlockCap)) {}
+    /*! \brief Construct from hash code */
+    static ListNode FromHash(uint64_t h, const MapNode* self) {
+      // Fibonacci Hashing. See also:
+      // https://programmingpraxis.com/2018/06/19/fibonacci-hash/
+      constexpr uint64_t coeff = 11400714819323198485ull;
+      uint64_t i = (coeff * h) >> (self->fib_);
+      return ListNode(i, self);
+    }
+    /*! \brief Construct from hash code if the position is head of list */
+    static ListNode GetHead(uint64_t h, const MapNode* self) {
+      ListNode n = ListNode::FromHash(h, self);
+      return n.IsHead() ? n : ListNode();
+    }
+    /*! \brief Metadata on the entry */
+    uint8_t& Meta() const { return *(cur->b + i % kBlockCap); }
+    /*! \brief Data on the entry */
+    KVType& Data() const {
+      return *(reinterpret_cast<KVType*>(cur->b + kBlockCap + (i % kBlockCap) * sizeof(KVType)));
+    }
+    /*! \brief Key on the entry */
+    key_type& Key() const { return Data().k; }
+    /*! \brief Value on the entry */
+    mapped_type& Val() const { return Data().v; }
+    /*! \brief If the entry is head of linked list */
+    bool IsHead() const { return (Meta() & 0b10000000) == 0b00000000; }
+    /*! \brief If the entry is none */
+    bool IsNone() const { return cur == nullptr; }
+    /*! \brief If the entry is empty slot */
+    bool IsEmpty() const { return Meta() == uint8_t(kEmptySlot); }
+    /*! \brief If the entry is protected slot */
+    bool IsProtected() const { return Meta() == uint8_t(kProtectedSlot); }
+    /*! \brief Set the entry to be empty */
+    void SetEmpty() const { Meta() = uint8_t(kEmptySlot); }
+    /*! \brief Set the entry to be protected */
+    void SetProtected() const { Meta() = uint8_t(kProtectedSlot); }
+    /*! \brief Set the entry's jump to its next entry */
+    void SetJump(uint8_t jump) const { (Meta() &= 0b10000000) |= jump; }
+    /*! \brief Construct a head of linked list in-place */
+    void NewHead(KVType&& v) const {
+      Meta() = 0b00000000;
+      new (&Data()) KVType(std::move(v));
+    }
+    /*! \brief Construct a tail of linked list in-place */
+    void NewTail(KVType&& v) const {
+      Meta() = 0b10000000;
+      new (&Data()) KVType(std::move(v));
+    }
+    /*! \brief If the entry has next entry on the linked list */
+    bool HasNext() const { return kJumpDists[Meta() & 0b01111111] != 0; }
+    /*! \brief Move the entry to the next entry on the linked list */
+    bool MoveToNext(const MapNode* self, uint8_t meta) {
+      uint64_t d = kJumpDists[meta & 0b01111111];
+      if (d == 0) {
+        i = 0;
+        cur = nullptr;
+        return false;
+      }
+      i = (i + d) & (self->slots_);
+      cur = self->data_ + (i / kBlockCap);
+      return true;
+    }
+    /*! \brief Move the entry to the next entry on the linked list */
+    bool MoveToNext(const MapNode* self) { return MoveToNext(self, Meta()); }
+    /*! \brief Get the previous entry on the linked list */
+    ListNode GetPrev(const MapNode* self) const {
+      // start from the head of the linked list, which must exist
+      ListNode n = FromHash(ObjectHash()(Key()), self);
+      // `m` is always the previous item of `n`
+      ListNode m = n;
+      for (n.MoveToNext(self); i != n.i; m = n, n.MoveToNext(self)) {
+      }
+      return m;
+    }
+    /*! \brief Get the next empty jump */
+    ListNode GetNextEmpty(const MapNode* self, uint8_t* jump) const {
+      for (uint8_t idx = 1; idx < kNumJumpDists; ++idx) {
+        ListNode n((i + kJumpDists[idx]) & (self->slots_), self);
+        if (n.IsEmpty()) {
+          *jump = idx;
+          return n;
+        }
+      }
+      *jump = 0;
+      return ListNode();
+    }
+    /*! \brief Index on the real array */
+    uint64_t i;
+    /*! \brief Pointer to the actual block */
+    Block* cur;
+  };
+
+  /*!
+   * \brief The base implementation of hash map iterator
+   * \tparam T The child class in CRTP
+   */
+  template <class T>
+  class IteratorBase {
+   public:
+    using iterator_category = std::bidirectional_iterator_tag;
+    using difference_type = int64_t;
+    using value_type = KVType;
+    using pointer = KVType*;
+    using reference = KVType&;
+    /*! \brief Default constructor */
+    IteratorBase() : i(0), self(nullptr) {}
+    /*! \brief Compare iterators */
+    bool operator==(const T& other) const { return i == other.i && self == other.self; }
+    /*! \brief Compare iterators */
+    bool operator!=(const T& other) const { return !(*this == other); }
+    /*! \brief De-reference iterators */
+    reference operator*() const { return ListNode(i, self).Data(); }
+    /*! \brief Pointer-to of iterators */
+    pointer operator->() const { return &ListNode(i, self).Data(); }
+    /*! \brief Prefix self increment */
+    T& operator++() {
+      if (self == nullptr || i > self->slots_) {
+        return static_cast<T&>(*this);
+      }
+      for (++i; i <= self->slots_; ++i) {
+        if (!ListNode(i, self).IsEmpty()) {
+          return static_cast<T&>(*this);
+        }
+      }
+      return static_cast<T&>(*this);
+    }
+    /*! \brief Prefix self decrement */
+    T& operator--() {
+      if (self == nullptr || i > self->slots_ + 1) {
+        return static_cast<T&>(*this);
+      }
+      while (i-- != 0) {
+        if (!ListNode(i, self).IsEmpty()) {
+          return static_cast<T&>(*this);
+        }
+      }
+      i = self->slots_ + 1;
+      return static_cast<T&>(*this);
+    }
+    /*! \brief Suffix self increment */
+    T operator++(int) {
+      T copy = static_cast<T&>(*this);
+      ++(*this);
+      return copy;
+    }
+    /*! \brief Suffix self decrement */
+    T operator--(int) {
+      T copy = static_cast<T&>(*this);
+      --(*this);
+      return copy;
+    }
+    /*! \brief Constructor */
+    IteratorBase(uint64_t _i, const MapNode* _self) : i(_i), self(_self) {
+      if (self != nullptr) {
+        for (; i <= self->slots_; ++i) {
+          if (!ListNode(i, self).IsEmpty()) {
+            break;
+          }
+        }
+      }
+    }
+    /*! \brief The position on the array */
+    uint64_t i;
+    /*! \brief The container it points to */
+    const MapNode* self;
+  };
+
+  static_assert(sizeof(KVType) == 16 || sizeof(KVType) == 8, "sizeof(KVType) incorrect");
+  static_assert(sizeof(Block) == kBlockCap * (sizeof(KVType) + 1), "sizeof(Block) incorrect");
+  static_assert(std::is_standard_layout<KVType>::value, "KVType is not standard layout");
+  static_assert(std::is_standard_layout<Block>::value, "Block is not standard layout");
+
+ public:
+  /*! \brief The iterator of hash map */
+  class iterator : public IteratorBase<iterator> {
+   public:
+    using iterator_category = std::bidirectional_iterator_tag;
+    using difference_type = int64_t;
+    using value_type = typename KVType::TStl;
+    using pointer = value_type*;
+    using reference = value_type&;
+
+    iterator() = default;
+
+   private:
+    iterator(uint64_t i, const MapNode* self) : IteratorBase(i, self) {}
+    friend class MapNode;
+  };
+
+ protected:
+  /*! \brief array of data blocks */
+  Block* data_;
+  /*! \brief number of slots minus 1 */
+  uint64_t slots_;
+  /*! \brief number of entries in the container */
+  uint64_t size_;
+  /*! \brief fib shift in Fibonacci Hashing */
+  uint8_t fib_;
+
+  // Reference class
+  template <typename, typename, typename, typename>
+  friend class Map;
+};
+
+/*!
+ * \brief Map container of NodeRef->NodeRef in DSL graph.
+ *  Map implements copy on write semantics, which means map is mutable
+ *  but copy will happen when array is referenced in more than two places.
+ *
+ * operator[] only provide const acces, use Set to mutate the content.
+ * \tparam K The key NodeRef type.
+ * \tparam V The value NodeRef type.
+ */
+template <typename K, typename V,
+          typename = typename std::enable_if<std::is_base_of<ObjectRef, K>::value>::type,
+          typename = typename std::enable_if<std::is_base_of<ObjectRef, V>::value>::type>
+class Map : public ObjectRef {
+ public:
+  class iterator;
+  /*!
+   * \brief default constructor
+   */
+  Map() { data_ = MapNode::Empty(); }
+  /*!
+   * \brief move constructor
+   * \param other source
+   */
+  Map(Map<K, V>&& other) { data_ = std::move(other.data_); }
+  /*!
+   * \brief copy constructor
+   * \param other source
+   */
+  Map(const Map<K, V>& other) : ObjectRef(other.data_) {}
+  /*!
+   * \brief copy assign operator
+   * \param other The source of assignment
+   * \return reference to self.
+   */
+  Map<K, V>& operator=(Map<K, V>&& other) {
+    data_ = std::move(other.data_);
+    return *this;
+  }
+  /*!
+   * \brief move assign operator
+   * \param other The source of assignment
+   * \return reference to self.
+   */
+  Map<K, V>& operator=(const Map<K, V>& other) {
+    data_ = other.data_;
+    return *this;
+  }
+  /*!
+   * \brief constructor from pointer
+   * \param n the container pointer
+   */
+  explicit Map(ObjectPtr<Object> n) : ObjectRef(n) {}
+  /*!
+   * \brief constructor from iterator
+   * \param begin begin of iterator
+   * \param end end of iterator
+   * \tparam IterType The type of iterator
+   */
+  template <typename IterType>
+  Map(IterType begin, IterType end) {
+    ObjectPtr<MapNode> n = MapNode::Empty();
+    n->Assign(begin, end);
+    data_ = std::move(n);
+  }
+  /*!
+   * \brief constructor from initializer list
+   * \param init The initalizer list
+   */
+  Map(std::initializer_list<std::pair<K, V>> init) {
+    ObjectPtr<MapNode> n = MapNode::Empty();
+    n->Assign(init.begin(), init.end());
+    data_ = std::move(n);
+  }
+  /*!
+   * \brief constructor from unordered_map
+   * \param init The unordered_map
+   */
+  template <typename Hash, typename Equal>
+  Map(const std::unordered_map<K, V, Hash, Equal>& init) {  // NOLINT(*)
+    ObjectPtr<MapNode> n = MapNode::Empty();
+    n->Assign(init.begin(), init.end());
+    data_ = std::move(n);
+  }
+  /*!
+   * \brief Read element from map.
+   * \param key The key
+   * \return the corresonding element.
+   */
+  const V at(const K& key) const { return DowncastNoCheck<V>(GetMapNode()->at(key)); }
+  /*!
+   * \brief Read element from map.
+   * \param key The key
+   * \return the corresonding element.
+   */
+  const V operator[](const K& key) const { return this->at(key); }
+  /*! \return The size of the array */
+  size_t size() const {
+    MapNode* n = GetMapNode();
+    return n == nullptr ? 0 : n->size();
+  }
+  /*! \return The number of elements of the key */
+  size_t count(const K& key) const {
+    MapNode* n = GetMapNode();
+    return n == nullptr ? 0 : GetMapNode()->count(key);
+  }
+  /*! \return whether array is empty */
+  bool empty() const { return size() == 0; }
+  /*!
+   * \brief set the Map.
+   * \param key The index key.
+   * \param value The value to be setted.
+   */
+  void Set(const K& key, const V& value) { CopyOnWrite()->operator[](key) = value; }
+  /*! \return begin iterator */
+  iterator begin() const { return iterator(GetMapNode()->begin()); }
+  /*! \return end iterator */
+  iterator end() const { return iterator(GetMapNode()->end()); }
+  /*! \return find the key and returns the associated iterator */
+  iterator find(const K& key) const { return iterator(GetMapNode()->find(key)); }
+  /*!
+   * \brief copy on write semantics
+   *  Do nothing if current handle is the unique copy of the array.
+   *  Otherwise make a new copy of the array to ensure the current handle
+   *  hold a unique copy.
+   *
+   * \return Handle to the internal node container(which ganrantees to be unique)
+   */
+  MapNode* CopyOnWrite() {
+    if (data_.get() == nullptr || !data_.unique()) {
+      data_ = MapNode::CopyFrom(GetMapNode());
+    }
+    return GetMapNode();
+  }
+  /*! \brief specify container node */
+  using ContainerType = MapNode;
+
+  /*! \brief Iterator of the hash map */
+  class iterator : public MapNode::IteratorBase<iterator> {
+   public:
+    using iterator_category = std::bidirectional_iterator_tag;
+    using difference_type = int64_t;
+    using value_type = const std::pair<K, V>;
+    using pointer = void;
+    using reference = value_type;
+
+    iterator() : MapNode::IteratorBase<iterator>() {}
+
+    value_type operator*() const {
+      MapNode::ListNode n(this->i, this->self);
+      return std::make_pair(DowncastNoCheck<K>(n.Key()), DowncastNoCheck<V>(n.Val()));
+    }
+
+   private:
+    iterator(const MapNode::iterator& itr)  // NOLINT(*)
+        : MapNode::IteratorBase<iterator>(itr.i, itr.self) {}
+
+    template <typename, typename, typename, typename>
+    friend class Map;
+  };
+
+ private:
+  /*! \brief Return data_ as type of pointer of MapNode */
+  MapNode* GetMapNode() const { return static_cast<MapNode*>(data_.get()); }
 };
 
 }  // namespace runtime

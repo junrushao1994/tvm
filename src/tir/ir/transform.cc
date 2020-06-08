@@ -94,23 +94,23 @@ IRModule PrimFuncPassNode::operator()(IRModule mod, const PassContext& pass_ctx)
   IRModuleNode* mod_ptr = mod.CopyOnWrite();
   auto* func_dict = mod_ptr->functions.CopyOnWrite();
   // directly loop over the underlying dict
-  for (auto& kv : func_dict->data) {
+  for (auto& kv : *func_dict) {
     // only picks up tir::PrimFunc
-    if (kv.second->IsInstance<PrimFuncNode>()) {
+    if (kv.v->IsInstance<PrimFuncNode>()) {
       // move out the function so that it is the only copy.
-      PrimFunc func = Downcast<PrimFunc>(std::move(kv.second));
+      PrimFunc func = Downcast<PrimFunc>(std::move(kv.v));
       func = pass_func(std::move(func), mod, pass_ctx);
-      kv.second = std::move(func);
+      kv.v = std::move(func);
 
-      if (!kv.second.defined()) {
-        deleted_list.push_back(kv.first);
+      if (!kv.v.defined()) {
+        deleted_list.push_back(kv.k);
       }
     }
   }
 
   // automatic removal of None
   for (const auto& gv : deleted_list) {
-    func_dict->data.erase(gv);
+    func_dict->erase(gv);
   }
   pass_ctx.Trace(mod, pass_info, false);
   return mod;
