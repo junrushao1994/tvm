@@ -25,7 +25,6 @@
 #define TVM_RUNTIME_CONTAINER_H_
 
 #include <dmlc/logging.h>
-#include <int_lib.h>
 #include <tvm/runtime/memory.h>
 #include <tvm/runtime/object.h>
 #include <tvm/runtime/packed_func.h>
