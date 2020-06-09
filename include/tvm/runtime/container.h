@@ -1709,7 +1709,6 @@ class MapNode : public Object {
   }
 
  private:
-
   /*!
    * \brief reset the array to content from iterator.
    * \param first begin of iterator
@@ -2504,7 +2503,9 @@ class Map : public ObjectRef {
    * \param key The index key.
    * \param value The value to be setted.
    */
-  void Set(const K& key, const V& value) { CopyOnWrite()->Emplace(key, ObjectRef(nullptr)).Val() = value; }
+  void Set(const K& key, const V& value) {
+    CopyOnWrite()->Emplace(key, ObjectRef(nullptr)).Val() = value;
+  }
   /*! \return begin iterator */
   iterator begin() const { return iterator(GetMapNode()->begin()); }
   /*! \return end iterator */
