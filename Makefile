@@ -28,15 +28,11 @@ ifndef DLPACK_PATH
   DLPACK_PATH = $(ROOTDIR)/3rdparty/dlpack
 endif
 
-ifndef COMPILER_RT_PATH
-  COMPILER_RT_PATH = $(ROOTDIR)/3rdparty/compiler-rt
-endif
-
 ifndef VTA_HW_PATH
   VTA_HW_PATH = $(ROOTDIR)/3rdparty/vta-hw
 endif
 
-INCLUDE_FLAGS = -Iinclude -I$(DLPACK_PATH)/include -I$(DMLC_CORE_PATH)/include -I$(COMPILER_RT_PATH)
+INCLUDE_FLAGS = -Iinclude -I$(DLPACK_PATH)/include -I$(DMLC_CORE_PATH)/include
 PKG_CFLAGS = -std=c++11 -Wall -O2 $(INCLUDE_FLAGS) -fPIC
 PKG_LDFLAGS =
 

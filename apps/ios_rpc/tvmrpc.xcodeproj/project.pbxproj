@@ -418,7 +418,6 @@
 				HEADER_SEARCH_PATHS = (
 					../../include,
 					../../3rdparty/dlpack/include,
-					../../3rdparty/compiler-rt,
 					"../../3rdparty/dmlc-core/include",
 				);
 				INFOPLIST_FILE = tvmrpc/Info.plist;
@@ -439,7 +438,6 @@
 				HEADER_SEARCH_PATHS = (
 					../../include,
 					../../3rdparty/dlpack/include,
-					../../3rdparty/compiler-rt,
 					"../../3rdparty/dmlc-core/include",
 				);
 				INFOPLIST_FILE = tvmrpc/Info.plist;
@@ -456,7 +454,6 @@
 				DEVELOPMENT_TEAM = 3FR42MXLK9;
 				HEADER_SEARCH_PATHS = (
 					../../3rdparty/dlpack/include,
-					../../3rdparty/compiler-rt,
 					../../include,
 					"../../3rdparty/dmlc-core/include",
 				);
@@ -475,7 +472,6 @@
 				DEVELOPMENT_TEAM = 3FR42MXLK9;
 				HEADER_SEARCH_PATHS = (
 					../../3rdparty/dlpack/include,
-					../../3rdparty/compiler-rt,
 					../../include,
 					"../../3rdparty/dmlc-core/include",
 				);
