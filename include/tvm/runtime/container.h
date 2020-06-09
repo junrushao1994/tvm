@@ -1612,7 +1612,63 @@ struct PackedFuncValueConverter<Optional<T>> {
 };
 
 /*! \brief map node content */
-class MapNode : public Object {
+class BaseMapNode : public Object {
+ public:
+  /*! \brief Type of the keys in the hash map */
+  using key_type = ObjectRef;
+  /*! \brief Type of the values in the hash map */
+  using mapped_type = ObjectRef;
+
+  static constexpr const uint32_t _type_index = TypeIndex::kRuntimeMap;
+  static constexpr const char* _type_key = "Map";
+  TVM_DECLARE_FINAL_OBJECT_INFO(BaseMapNode, Object);
+
+  /*!
+   * \brief Number of elements in the MapNode
+   * \return The result
+   */
+  size_t size() const { return size_; }
+
+ protected:
+  /*! \brief Alternative to std::pair with standard layout */
+  struct KVType {
+    template <class K, class V>
+    KVType(const K& k, const V& v) : k(k), v(v) {}
+    template <class K, class V>
+    KVType(K&& k, V&& v) : k(std::forward<K>(k)), v(std::forward<V>(v)) {}
+    template <class K, class V>
+    KVType(const K& k, V&& v) : k(k), v(std::forward<V>(v)) {}
+    template <class K, class V>
+    KVType(K&& k, const V& v) : k(std::forward<K>(k)), v(v) {}
+    /*! \brief The STL type */
+    using TStl = std::pair<key_type, mapped_type>;
+    /*! \brief Converting from STL type */
+    KVType(const TStl& kv) : k(kv.first), v(kv.second) {}  // NOLINT(*)
+    /*! \brief Converting to STL type */
+    operator TStl() const { return std::make_pair(k, v); }
+    /*! \brief The key, or std::pair::first */
+    key_type k;
+    /*! \brief The value, or std::pair::second */
+    mapped_type v;
+  };
+  static_assert(sizeof(KVType) == 16 || sizeof(KVType) == 8, "sizeof(KVType) incorrect");
+  static_assert(std::is_standard_layout<KVType>::value, "KVType is not standard layout");
+
+  /*! \brief number of slots minus 1 */
+  uint64_t slots_;
+  /*! \brief number of entries in the container */
+  uint64_t size_;
+
+  // Reference class
+  template <typename, typename, typename, typename>
+  friend class Map;
+};
+
+template <>
+ObjectPtr<BaseMapNode> make_object<>() = delete;
+
+/*! \brief map node content */
+class MapNode : public BaseMapNode {
  private:
   /*! \brief The number of elements in a memory block */
   static constexpr int kBlockCap = 16;
@@ -1625,7 +1681,6 @@ class MapNode : public Object {
   /*! \brief Number of probing choices available */
   static constexpr int kNumJumpDists = 126;
 
-  struct KVType;
   struct Block;
   struct ListNode;
 
@@ -1634,25 +1689,11 @@ class MapNode : public Object {
 
  public:
   class iterator;
-  /*! \brief Type of the keys in the hash map */
-  using key_type = ObjectRef;
-  /*! \brief Type of the values in the hash map */
-  using mapped_type = ObjectRef;
-
-  static constexpr const uint32_t _type_index = TypeIndex::kRuntimeMap;
-  static constexpr const char* _type_key = "Map";
-  TVM_DECLARE_FINAL_OBJECT_INFO(MapNode, Object);
 
   /*!
    * \brief Destroy the MapNode
    */
   ~MapNode() { this->Reset(); }
-
-  /*!
-   * \brief Number of elements in the MapNode
-   * \return The result
-   */
-  size_t size() const { return size_; }
 
   /*!
    * \brief Count the number of times a key exists in the MapNode
@@ -2132,28 +2173,6 @@ class MapNode : public Object {
     return (coeff * hash_value) >> fib_shift;
   }
 
-  /*! \brief Alternative to std::pair with standard layout */
-  struct KVType {
-    template <class K, class V>
-    KVType(const K& k, const V& v) : k(k), v(v) {}
-    template <class K, class V>
-    KVType(K&& k, V&& v) : k(std::forward<K>(k)), v(std::forward<V>(v)) {}
-    template <class K, class V>
-    KVType(const K& k, V&& v) : k(k), v(std::forward<V>(v)) {}
-    template <class K, class V>
-    KVType(K&& k, const V& v) : k(std::forward<K>(k)), v(v) {}
-    /*! \brief The STL type */
-    using TStl = std::pair<key_type, mapped_type>;
-    /*! \brief Converting from STL type */
-    KVType(const TStl& kv) : k(kv.first), v(kv.second) {}  // NOLINT(*)
-    /*! \brief Converting to STL type */
-    operator TStl() const { return std::make_pair(k, v); }
-    /*! \brief The key, or std::pair::first */
-    key_type k;
-    /*! \brief The value, or std::pair::second */
-    mapped_type v;
-  };
-
   /*! \brief POD type of a chunk of memory used to */
   struct Block {
     uint8_t b[kBlockCap + kBlockCap * sizeof(KVType)];
@@ -2318,9 +2337,7 @@ class MapNode : public Object {
     const MapNode* self;
   };
 
-  static_assert(sizeof(KVType) == 16 || sizeof(KVType) == 8, "sizeof(KVType) incorrect");
   static_assert(sizeof(Block) == kBlockCap * (sizeof(KVType) + 1), "sizeof(Block) incorrect");
-  static_assert(std::is_standard_layout<KVType>::value, "KVType is not standard layout");
   static_assert(std::is_standard_layout<Block>::value, "Block is not standard layout");
 
  public:
@@ -2341,14 +2358,10 @@ class MapNode : public Object {
   };
 
  protected:
-  /*! \brief array of data blocks */
-  Block* data_;
-  /*! \brief number of slots minus 1 */
-  uint64_t slots_;
-  /*! \brief number of entries in the container */
-  uint64_t size_;
   /*! \brief fib shift in Fibonacci Hashing */
   uint32_t fib_shift_;
+  /*! \brief array of data blocks */
+  Block* data_;
 
   /* clang-format off */
   /*! \brief Candidates of probing distance */
