@@ -1613,6 +1613,7 @@ struct PackedFuncValueConverter<Optional<T>> {
 
 /*! \brief map node content */
 class MapNode : public Object {
+ private:
   /*! \brief The number of elements in a memory block */
   static constexpr int kBlockCap = 16;
   /*! \brief Maximum load factor of the hash map */
@@ -1623,35 +1624,16 @@ class MapNode : public Object {
   static constexpr uint8_t kProtectedSlot = uint8_t(0b11111110);
   /*! \brief Number of probing choices available */
   static constexpr int kNumJumpDists = 126;
-  /* clang-format off */
-  /*! \brief Candidates of probing distance */
-  TVM_DLL static constexpr uint64_t kJumpDists[kNumJumpDists] {
-    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
-    // Quadratic probing with triangle numbers. See also:
-    // 1) https://en.wikipedia.org/wiki/Quadratic_probing
-    // 2) https://fgiesen.wordpress.com/2015/02/22/triangular-numbers-mod-2n/
-    // 3) https://github.com/skarupke/flat_hash_map
-    21, 28, 36, 45, 55, 66, 78, 91, 105, 120,
-    136, 153, 171, 190, 210, 231, 253, 276, 300, 325,
-    351, 378, 406, 435, 465, 496, 528, 561, 595, 630,
-    666, 703, 741, 780, 820, 861, 903, 946, 990, 1035,
-    1081, 1128, 1176, 1225, 1275, 1326, 1378, 1431, 1485, 1540,
-    1596, 1653, 1711, 1770, 1830, 1891, 1953, 2016, 2080, 2145,
-    2211, 2278, 2346, 2415, 2485, 2556, 2628,
-    // larger triangle numbers
-    8515, 19110, 42778, 96141, 216153,
-    486591, 1092981, 2458653, 5532801, 12442566,
-    27993903, 62983476, 141717030, 318844378, 717352503,
-    1614057336, 3631522476, 8170957530, 18384510628, 41364789378,
-    93070452520, 209408356380, 471168559170, 1060128894105, 2385289465695,
-    5366898840628, 12075518705635, 27169915244790, 61132312065111, 137547689707000,
-    309482283181501, 696335127828753, 1566753995631385, 3525196511162271, 7931691992677701,
-    17846306936293605, 40154190677507445, 90346928918121501, 203280589587557251, 457381325854679626,
-    1029107982097042876, 2315492959180353330, 5209859154120846435,
-  };
-  /* clang-format on */
+
+  struct KVType;
+  struct Block;
+  struct ListNode;
+
+  template <typename, typename, typename, typename>
+  friend class Map;  // reference class
 
  public:
+  class iterator;
   /*! \brief Type of the keys in the hash map */
   using key_type = ObjectRef;
   /*! \brief Type of the values in the hash map */
@@ -1660,14 +1642,6 @@ class MapNode : public Object {
   static constexpr const uint32_t _type_index = TypeIndex::kRuntimeMap;
   static constexpr const char* _type_key = "Map";
   TVM_DECLARE_FINAL_OBJECT_INFO(MapNode, Object);
-
- private:
-  struct KVType;
-  struct Block;
-  struct ListNode;
-
- public:
-  class iterator;
 
   /*!
    * \brief Destroy the MapNode
@@ -1776,7 +1750,7 @@ class MapNode : public Object {
     if (this->size_ == 0) {
       return ListNode();
     }
-    for (ListNode n = ListNode::GetHead(ObjectHash()(key), this); !n.IsNone(); n.MoveToNext(this)) {
+    for (ListNode n = GetHead(ObjectHash()(key)); !n.IsNone(); n.MoveToNext(this)) {
       if (ObjectEqual()(key, n.Key())) {
         return n;
       }
@@ -1819,7 +1793,7 @@ class MapNode : public Object {
   ListNode Emplace(Key&& key, Args&&... args) {
     ReHashIfNone();
     // required that `m` to be the head of a linked list through which we can iterator
-    ListNode m = ListNode::FromHash(ObjectHash()(key), this);
+    ListNode m = FromHash(ObjectHash()(key));
     // `m` can be: 1) empty; 2) body of an irrelevant list; 3) head of the relevant list
     // Case 1: empty
     if (m.IsEmpty()) {
@@ -1972,7 +1946,7 @@ class MapNode : public Object {
     data_ = nullptr;
     slots_ = 0;
     size_ = 0;
-    fib_ = 63;
+    fib_shift_ = 63;
   }
 
   /*! \brief Clear the container to empty, release all entries */
@@ -2004,16 +1978,16 @@ class MapNode : public Object {
     if (new_n_slots <= 0) {
       return;
     }
-    uint8_t new_fib = __builtin_clzll(new_n_slots);
-    new_n_slots = one << (64 - new_fib);
+    uint32_t new_fib_shift = __builtin_clzll(new_n_slots);
+    new_n_slots = one << (64 - new_fib_shift);
     if (new_n_slots <= slots_ + 1) {
       return;
     }
-    ObjectPtr<MapNode> p = MoveFrom(new_fib, new_n_slots, this);
+    ObjectPtr<MapNode> p = MoveFrom(new_fib_shift, new_n_slots, this);
     std::swap(p->data_, this->data_);
     std::swap(p->slots_, this->slots_);
     std::swap(p->size_, this->size_);
-    std::swap(p->fib_, this->fib_);
+    std::swap(p->fib_shift_, this->fib_shift_);
   }
 
   /*!
@@ -2059,7 +2033,6 @@ class MapNode : public Object {
     return false;
   }
 
- public:
   /*!
    * \brief Create an empty container
    * \return The object created
@@ -2069,18 +2042,17 @@ class MapNode : public Object {
     p->data_ = nullptr;
     p->slots_ = 0;
     p->size_ = 0;
-    p->fib_ = 63;
+    p->fib_shift_ = 63;
     return p;
   }
 
- private:
   /*!
    * \brief Create an empty container
    * \param fib The fib shift provided
    * \param n_slots Number of slots required
    * \return The object created
    */
-  static ObjectPtr<MapNode> Empty(uint8_t fib, uint64_t n_slots) {
+  static ObjectPtr<MapNode> Empty(uint32_t fib_shift, uint64_t n_slots) {
     if (n_slots == 0) {
       return Empty();
     }
@@ -2089,7 +2061,7 @@ class MapNode : public Object {
     Block* block = p->data_ = new Block[n_blocks];
     p->slots_ = n_slots - 1;
     p->size_ = 0;
-    p->fib_ = fib;
+    p->fib_shift_ = fib_shift;
     for (uint64_t i = 0; i < n_blocks; ++i, ++block) {
       std::fill(block->b, block->b + kBlockCap, uint8_t(kEmptySlot));
     }
@@ -2103,8 +2075,8 @@ class MapNode : public Object {
    * \param m The source container
    * \return The object created
    */
-  static ObjectPtr<MapNode> MoveFrom(uint8_t fib, uint64_t n_slots, MapNode* m) {
-    ObjectPtr<MapNode> p = MapNode::Empty(fib, n_slots);
+  static ObjectPtr<MapNode> MoveFrom(uint32_t fib_shift, uint64_t n_slots, MapNode* m) {
+    ObjectPtr<MapNode> p = MapNode::Empty(fib_shift, n_slots);
     uint64_t n_blocks = CalcNumBlocks(m->slots_);
     for (uint64_t bi = 0; bi < n_blocks; ++bi) {
       uint8_t* m_m = m->data_[bi].b;
@@ -2121,7 +2093,7 @@ class MapNode : public Object {
     m->data_ = nullptr;
     m->slots_ = 0;
     m->size_ = 0;
-    m->fib_ = 0;
+    m->fib_shift_ = 0;
     return p;
   }
 
@@ -2136,7 +2108,7 @@ class MapNode : public Object {
     p->data_ = new Block[n_blocks];
     p->slots_ = m->slots_;
     p->size_ = m->size_;
-    p->fib_ = m->fib_;
+    p->fib_shift_ = m->fib_shift_;
     for (uint64_t bi = 0; bi < n_blocks; ++bi) {
       uint8_t* m_m = m->data_[bi].b;
       uint8_t* p_m = p->data_[bi].b;
@@ -2153,9 +2125,27 @@ class MapNode : public Object {
     return p;
   }
 
+  /*! \brief Construct from hash code */
+  ListNode FromHash(uint64_t hash_value) const {
+    return ListNode(FibHash(hash_value, fib_shift_), this);
+  }
+
+  /*! \brief Construct from hash code if the position is head of list */
+  ListNode GetHead(uint64_t hash_value) const {
+    ListNode n = FromHash(hash_value);
+    return n.IsHead() ? n : ListNode();
+  }
+
   static uint64_t CalcNumBlocks(uint64_t n_slots_m1) {
     uint64_t n_slots = n_slots_m1 > 0 ? n_slots_m1 + 1 : 0;
     return (n_slots + kBlockCap - 1) / kBlockCap;
+  }
+
+  static uint64_t FibHash(uint64_t hash_value, uint32_t fib_shift) {
+    // Fibonacci Hashing. See also:
+    // https://programmingpraxis.com/2018/06/19/fibonacci-hash/
+    constexpr uint64_t coeff = 11400714819323198485ull;
+    return (coeff * hash_value) >> fib_shift;
   }
 
   /*! \brief Alternative to std::pair with standard layout */
@@ -2191,19 +2181,6 @@ class MapNode : public Object {
     ListNode() : i(0), cur(nullptr) {}
     /*! \brief Construct from position */
     ListNode(uint64_t i, const MapNode* self) : i(i), cur(self->data_ + (i / kBlockCap)) {}
-    /*! \brief Construct from hash code */
-    static ListNode FromHash(uint64_t h, const MapNode* self) {
-      // Fibonacci Hashing. See also:
-      // https://programmingpraxis.com/2018/06/19/fibonacci-hash/
-      constexpr uint64_t coeff = 11400714819323198485ull;
-      uint64_t i = (coeff * h) >> (self->fib_);
-      return ListNode(i, self);
-    }
-    /*! \brief Construct from hash code if the position is head of list */
-    static ListNode GetHead(uint64_t h, const MapNode* self) {
-      ListNode n = ListNode::FromHash(h, self);
-      return n.IsHead() ? n : ListNode();
-    }
     /*! \brief Metadata on the entry */
     uint8_t& Meta() const { return *(cur->b + i % kBlockCap); }
     /*! \brief Data on the entry */
@@ -2257,7 +2234,7 @@ class MapNode : public Object {
     /*! \brief Get the previous entry on the linked list */
     ListNode GetPrev(const MapNode* self) const {
       // start from the head of the linked list, which must exist
-      ListNode n = FromHash(ObjectHash()(Key()), self);
+      ListNode n = self->FromHash(ObjectHash()(Key()));
       // `m` is always the previous item of `n`
       ListNode m = n;
       for (n.MoveToNext(self); i != n.i; m = n, n.MoveToNext(self)) {
@@ -2387,11 +2364,35 @@ class MapNode : public Object {
   /*! \brief number of entries in the container */
   uint64_t size_;
   /*! \brief fib shift in Fibonacci Hashing */
-  uint8_t fib_;
+  uint32_t fib_shift_;
 
-  // Reference class
-  template <typename, typename, typename, typename>
-  friend class Map;
+  /* clang-format off */
+  /*! \brief Candidates of probing distance */
+  TVM_DLL static constexpr uint64_t kJumpDists[kNumJumpDists] {
+    0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+    // Quadratic probing with triangle numbers. See also:
+    // 1) https://en.wikipedia.org/wiki/Quadratic_probing
+    // 2) https://fgiesen.wordpress.com/2015/02/22/triangular-numbers-mod-2n/
+    // 3) https://github.com/skarupke/flat_hash_map
+    21, 28, 36, 45, 55, 66, 78, 91, 105, 120,
+    136, 153, 171, 190, 210, 231, 253, 276, 300, 325,
+    351, 378, 406, 435, 465, 496, 528, 561, 595, 630,
+    666, 703, 741, 780, 820, 861, 903, 946, 990, 1035,
+    1081, 1128, 1176, 1225, 1275, 1326, 1378, 1431, 1485, 1540,
+    1596, 1653, 1711, 1770, 1830, 1891, 1953, 2016, 2080, 2145,
+    2211, 2278, 2346, 2415, 2485, 2556, 2628,
+    // larger triangle numbers
+    8515, 19110, 42778, 96141, 216153,
+    486591, 1092981, 2458653, 5532801, 12442566,
+    27993903, 62983476, 141717030, 318844378, 717352503,
+    1614057336, 3631522476, 8170957530, 18384510628, 41364789378,
+    93070452520, 209408356380, 471168559170, 1060128894105, 2385289465695,
+    5366898840628, 12075518705635, 27169915244790, 61132312065111, 137547689707000,
+    309482283181501, 696335127828753, 1566753995631385, 3525196511162271, 7931691992677701,
+    17846306936293605, 40154190677507445, 90346928918121501, 203280589587557251, 457381325854679626,
+    1029107982097042876, 2315492959180353330, 5209859154120846435,
+  };
+  /* clang-format on */
 };
 
 /*!
