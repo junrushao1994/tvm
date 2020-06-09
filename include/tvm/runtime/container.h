@@ -1709,21 +1709,6 @@ class MapNode : public Object {
   }
 
  private:
-  /*!
-   * \brief Insert and construct in-place with the given args, do nothing if key already exists
-   * \tparam Args Type of the args forwarded to the constructor
-   */
-  template <typename... Args>
-  void emplace(Args&&... args) {
-    Emplace(std::forward<Args>(args)...);
-  }
-
-  /*!
-   * \brief Index value associated with a key, create new entry if the key does not exist
-   * \param key The indexing key
-   * \return The mutable reference to the value
-   */
-  mapped_type& operator[](const key_type& key) { return Emplace(key, mapped_type()).Val(); }
 
   /*!
    * \brief reset the array to content from iterator.
@@ -2519,7 +2504,7 @@ class Map : public ObjectRef {
    * \param key The index key.
    * \param value The value to be setted.
    */
-  void Set(const K& key, const V& value) { CopyOnWrite()->operator[](key) = value; }
+  void Set(const K& key, const V& value) { CopyOnWrite()->Emplace(key, ObjectRef(nullptr)).Val() = value; }
   /*! \return begin iterator */
   iterator begin() const { return iterator(GetMapNode()->begin()); }
   /*! \return end iterator */

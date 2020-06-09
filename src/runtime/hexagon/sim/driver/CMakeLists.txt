@@ -57,7 +57,6 @@ target_include_directories(sim_dev
   PUBLIC ".."
   PUBLIC "../../../../../include"
   PUBLIC "../../../../../3rdparty/dlpack/include"
-  PUBLIC "../../../../../3rdparty/compiler-rt"
 )
 
 target_link_libraries(sim_dev "-ldl")
