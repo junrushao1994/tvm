@@ -1751,22 +1751,6 @@ class MapNode : public BaseMapNode {
 
  private:
   /*!
-   * \brief reset the array to content from iterator.
-   * \param first begin of iterator
-   * \param last end of iterator
-   * \tparam IterType The type of iterator
-   */
-  template <typename IterType>
-  void Assign(IterType first, IterType last) {
-    int64_t cap = std::distance(first, last);
-    this->ReleaseItems();
-    this->Reserve(cap);
-    for (; first != last; ++first) {
-      this->Emplace(*first);
-    }
-  }
-
-  /*!
    * \brief Search for the given key
    * \param key The key
    * \return ListNode that associated with the key
@@ -2452,28 +2436,20 @@ class Map : public ObjectRef {
    */
   template <typename IterType>
   Map(IterType begin, IterType end) {
-    ObjectPtr<MapNode> n = MapNode::Empty();
-    n->Assign(begin, end);
-    data_ = std::move(n);
+    Assign(begin, end);
   }
   /*!
    * \brief constructor from initializer list
    * \param init The initalizer list
    */
-  Map(std::initializer_list<std::pair<K, V>> init) {
-    ObjectPtr<MapNode> n = MapNode::Empty();
-    n->Assign(init.begin(), init.end());
-    data_ = std::move(n);
-  }
+  Map(std::initializer_list<std::pair<K, V>> init) { Assign(init.begin(), init.end()); }
   /*!
    * \brief constructor from unordered_map
    * \param init The unordered_map
    */
   template <typename Hash, typename Equal>
   Map(const std::unordered_map<K, V, Hash, Equal>& init) {  // NOLINT(*)
-    ObjectPtr<MapNode> n = MapNode::Empty();
-    n->Assign(init.begin(), init.end());
-    data_ = std::move(n);
+    Assign(init.begin(), init.end());
   }
   /*!
    * \brief Create a runtime::Map and expose it as ObjectPtr
@@ -2567,6 +2543,22 @@ class Map : public ObjectRef {
   };
 
  private:
+  /*!
+   * \brief reset the array to content from iterator.
+   * \param first begin of iterator
+   * \param last end of iterator
+   * \tparam IterType The type of iterator
+   */
+  template <typename IterType>
+  void Assign(IterType first, IterType last) {
+    int64_t cap = std::distance(first, last);
+    ObjectPtr<MapNode> n = MapNode::Empty();
+    n->Reserve(cap);
+    for (; first != last; ++first) {
+      n->Emplace(*first);
+    }
+    data_ = std::move(n);
+  }
   /*! \brief Return data_ as type of pointer of MapNode */
   MapNode* GetMapNode() const { return static_cast<MapNode*>(data_.get()); }
 };
