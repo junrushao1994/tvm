@@ -623,6 +623,18 @@ class Array : public ObjectRef {
     data_ = other.data_;
     return *this;
   }
+  /*!
+   * \brief Create a runtime::Array and expose it as ObjectPtr
+   * \tparam Args Type of argument list
+   * \param args Argument list
+   * \return The result ObjectPtr
+   */
+  template <typename... Args>
+  static ObjectPtr<Object> CreateObjectPtr(Args&&... args) {
+    Array<T> array(std::forward<Args>(args)...);
+    ObjectPtr<Object> data = std::move(array.data_);
+    return data;
+  }
 
  public:
   // iterators
@@ -1716,13 +1728,6 @@ class MapNode : public Object {
     }
   }
 
-  /*!
-   * \brief Index value associated with a key, create new entry if the key does not exist
-   * \param key The indexing key
-   * \return The mutable reference to the value
-   */
-  mapped_type& operator[](const key_type& key) { return Emplace(key, mapped_type()).Val(); }
-
  private:
   /*!
    * \brief Insert and construct in-place with the given args, do nothing if key already exists
@@ -1732,6 +1737,13 @@ class MapNode : public Object {
   void emplace(Args&&... args) {
     Emplace(std::forward<Args>(args)...);
   }
+
+  /*!
+   * \brief Index value associated with a key, create new entry if the key does not exist
+   * \param key The indexing key
+   * \return The mutable reference to the value
+   */
+  mapped_type& operator[](const key_type& key) { return Emplace(key, mapped_type()).Val(); }
 
   /*!
    * \brief reset the array to content from iterator.
@@ -2458,6 +2470,18 @@ class Map : public ObjectRef {
     ObjectPtr<MapNode> n = MapNode::Empty();
     n->Assign(init.begin(), init.end());
     data_ = std::move(n);
+  }
+  /*!
+   * \brief Create a runtime::Map and expose it as ObjectPtr
+   * \tparam Args Type of argument list
+   * \param args Argument list
+   * \return The result ObjectPtr
+   */
+  template <typename... Args>
+  static ObjectPtr<Object> CreateObjectPtr(Args&&... args) {
+    Map<K, V> map(std::forward<Args>(args)...);
+    ObjectPtr<Object> data = std::move(map.data_);
+    return data;
   }
   /*!
    * \brief Read element from map.

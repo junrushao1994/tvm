@@ -390,31 +390,29 @@ class JSONAttrSetter : public AttrVisitor {
     }
     // handling Array
     if (jnode->type_key == ArrayNode::_type_key) {
-      ObjectPtr<ArrayNode> n = ArrayNode::CreateRepeated(jnode->data.size(), ObjectRef(nullptr));
-      for (size_t i = 0; i < jnode->data.size(); ++i) {
-        int index = jnode->data[i];
-        n->SetItem(i, ObjectRef(node_list_->at(index)));
+      std::vector<ObjectRef> n;
+      for (auto index : jnode->data) {
+        n.push_back(ObjectRef(node_list_->at(index)));
       }
-      *node = std::move(n);
+      *node = Array<ObjectRef>::CreateObjectPtr(n);
       return;
     }
     // handling Map
     if (jnode->type_key == MapNode::_type_key) {
-      ObjectPtr<MapNode> n = make_object<MapNode>();
-      MapNode* m = static_cast<MapNode*>(n.get());
+      std::unordered_map<ObjectRef, ObjectRef, ObjectHash, ObjectEqual> n;
       if (jnode->keys.empty()) {
         CHECK_EQ(jnode->data.size() % 2, 0U);
         for (size_t i = 0; i < jnode->data.size(); i += 2) {
-          (*m)[ObjectRef(node_list_->at(jnode->data[i]))] =
+          n[ObjectRef(node_list_->at(jnode->data[i]))] =
               ObjectRef(node_list_->at(jnode->data[i + 1]));
         }
       } else {
         CHECK_EQ(jnode->data.size(), jnode->keys.size());
         for (size_t i = 0; i < jnode->data.size(); ++i) {
-          (*m)[String(jnode->keys[i])] = ObjectRef(node_list_->at(jnode->data[i]));
+          n[String(jnode->keys[i])] = ObjectRef(node_list_->at(jnode->data[i]));
         }
       }
-      *node = std::move(n);
+      *node = Map<ObjectRef, ObjectRef>::CreateObjectPtr(n);
       return;
     }
     jnode_ = jnode;
