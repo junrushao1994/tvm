@@ -26,8 +26,8 @@
 
 // Definitions for builtins unavailable on MSVC
 #if defined(_MSC_VER) && !defined(__clang__)
-#include <stdint.h>
 #include <intrin.h>
+#include <stdint.h>
 
 uint32_t __inline __builtin_ctz(uint32_t value) {
   unsigned long trailing_zero = 0;
