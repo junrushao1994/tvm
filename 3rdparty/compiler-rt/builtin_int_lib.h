@@ -18,11 +18,11 @@
  * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
  * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
  * THE SOFTWARE.
- * \file int_lib.h
- * \brief Functions for conversion between fp32 and fp16, adopted from compiler-rt.
+ * \file builtin_int_lib.h
+ * \brief Functions for counting leading or trailing zeros.
  */
-#ifndef COMPILER_RT_INT_LIB_H_
-#define COMPILER_RT_INT_LIB_H_
+#ifndef COMPILER_RT_BUILTIN_INT_LIB_H_
+#define COMPILER_RT_BUILTIN_INT_LIB_H_
 
 // Definitions for builtins unavailable on MSVC
 #if defined(_MSC_VER) && !defined(__clang__)
@@ -54,9 +54,6 @@ uint32_t __inline __builtin_clzll(uint64_t value) {
   if (msh != 0) return __builtin_clz(msh);
   return 32 + __builtin_clz(lsh);
 }
-#endif
-
-#define __builtin_clzl __builtin_clzll
+#endif  // defined(_M_ARM) || defined(_M_X64)
 #endif  // defined(_MSC_VER) && !defined(__clang__)
-
-#endif  // COMPILER_RT_INT_LIB_H_
+#endif  // COMPILER_RT_BUILTIN_INT_LIB_H_

@@ -67,6 +67,13 @@
 #include <utility>
 #include <vector>
 
+#if defined(_MSC_VER) && !defined(__clang__)
+uint32_t __builtin_ctz(uint32_t value);
+uint32_t __builtin_clz(uint32_t value);
+uint32_t __builtin_clzll(uint64_t value);
+#define __builtin_clzl __builtin_clzll
+#endif  // defined(_MSC_VER) && !defined(__clang__)
+
 namespace tvm {
 namespace runtime {
 

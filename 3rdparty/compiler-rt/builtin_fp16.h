@@ -239,4 +239,4 @@ static inline DST_T __extendXfYf2__(SRC_T a) {
   return dst_rep.f;
 }
 
-#endif  // COMPILER_RT_INT_LIB_H_
+#endif  // COMPILER_RT_BUILTIN_FP16_H_
