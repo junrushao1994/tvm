@@ -1663,13 +1663,6 @@ class MapNode : public Object {
   size_t size() const { return size_; }
 
   /*!
-   * \brief Index value associated with a key, create new entry if the key does not exist
-   * \param key The indexing key
-   * \return The mutable reference to the value
-   */
-  mapped_type& operator[](const key_type& key) { return Emplace(key, mapped_type()).Val(); }
-
-  /*!
    * \brief Count the number of times a key exists in the MapNode
    * \param key The indexing key
    * \return The result, 0 or 1
@@ -1707,15 +1700,6 @@ class MapNode : public Object {
   }
 
   /*!
-   * \brief Insert and construct in-place with the given args, do nothing if key already exists
-   * \tparam Args Type of the args forwarded to the constructor
-   */
-  template <typename... Args>
-  void emplace(Args&&... args) {
-    Emplace(std::forward<Args>(args)...);
-  }
-
-  /*!
    * \brief Erase the entry associated with the key, do nothing if not exists
    * \param key The indexing key
    */
@@ -1732,7 +1716,23 @@ class MapNode : public Object {
     }
   }
 
+  /*!
+   * \brief Index value associated with a key, create new entry if the key does not exist
+   * \param key The indexing key
+   * \return The mutable reference to the value
+   */
+  mapped_type& operator[](const key_type& key) { return Emplace(key, mapped_type()).Val(); }
+
  private:
+  /*!
+   * \brief Insert and construct in-place with the given args, do nothing if key already exists
+   * \tparam Args Type of the args forwarded to the constructor
+   */
+  template <typename... Args>
+  void emplace(Args&&... args) {
+    Emplace(std::forward<Args>(args)...);
+  }
+
   /*!
    * \brief reset the array to content from iterator.
    * \param first begin of iterator

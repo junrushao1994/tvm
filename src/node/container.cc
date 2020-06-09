@@ -303,12 +303,12 @@ TVM_REGISTER_REFLECTION_VTABLE(MapNode, MapNodeTrait)
 
 TVM_REGISTER_GLOBAL("node.Map").set_body([](TVMArgs args, TVMRetValue* ret) {
   CHECK_EQ(args.size() % 2, 0);
-  ObjectPtr<MapNode> data = MapNode::Empty();
+  std::unordered_map<ObjectRef, ObjectRef, ObjectPtrHash, ObjectPtrEqual> data;
   for (int i = 0; i < args.num_args; i += 2) {
     ObjectRef k =
         String::CanConvertFrom(args[i]) ? args[i].operator String() : args[i].operator ObjectRef();
     ObjectRef v = args[i + 1];
-    data->emplace(std::move(k), std::move(v));
+    data.emplace(std::move(k), std::move(v));
   }
   *ret = Map<ObjectRef, ObjectRef>(std::move(data));
 });
