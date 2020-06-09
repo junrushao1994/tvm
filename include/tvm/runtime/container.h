@@ -2048,7 +2048,7 @@ class MapNode : public Object {
 
   /*!
    * \brief Create an empty container
-   * \param fib The fib shift provided
+   * \param fib_shift The fib shift provided
    * \param n_slots Number of slots required
    * \return The object created
    */
@@ -2070,7 +2070,7 @@ class MapNode : public Object {
 
   /*!
    * \brief Create an empty container with elements moving from another MapNode
-   * \param fib The fib shift provided
+   * \param fib_shift The fib shift provided
    * \param n_slots Number of slots required
    * \param m The source container
    * \return The object created
