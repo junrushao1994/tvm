@@ -1824,7 +1824,7 @@ class MapNode : public BaseMapNode {
     // `m` can be: 1) empty; 2) body of an irrelevant list; 3) head of the relevant list
     // Case 1: empty
     if (m.IsEmpty()) {
-      m.NewHead(KVType(k, nullptr));
+      m.NewHead(KVType(k, ObjectRef(nullptr)));
       this->size_ += 1;
       *result = m;
       return true;
@@ -1856,7 +1856,7 @@ class MapNode : public BaseMapNode {
     if (!m.GetNextEmpty(this, &jump, result)) {
       return false;
     }
-    result->NewTail(KVType(k, nullptr));
+    result->NewTail(KVType(k, ObjectRef(nullptr)));
     // link `n` to `empty`, and move forward
     m.SetJump(jump);
     this->size_ += 1;
@@ -1909,7 +1909,7 @@ class MapNode : public BaseMapNode {
     } while (r.MoveToNext(this, r_meta));
     // finally we have done moving the linked list
     // fill data_ into `n`
-    n.NewHead(KVType(k, nullptr));
+    n.NewHead(KVType(k, ObjectRef(nullptr)));
     this->size_ += 1;
     *result = n;
     return true;
