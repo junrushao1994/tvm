@@ -1779,89 +1779,70 @@ class MapNode : public BaseMapNode {
   }
 
   /*!
-   * \brief In-place construct an entry, or do nothing if already exists
-   * \tparam Item Type of arguments forwarded to the constructor
-   * \param arg Arguments fed to the constructor
-   * \return ListNode that associated with the key, no matter whether it already exists
+   * \brief Try to insert a key, or do nothing if already exists
+   * \param k The indexing key
+   * \param result The linked-list entry found or just constructed
+   * \return A boolean, indicating if actual insertion happens
    */
-  template <typename Item>
-  ListNode Emplace(Item&& arg) {
-    KVType item(std::forward<Item>(arg));
-    return Emplace(std::move(item.k), std::move(item.v));
-  }
-
-  /*!
-   * \brief In-place construct an entry, or do nothing if already exists
-   * \tparam Key Type of the key
-   * \tparam Args Type of the rest of the arguments fed to the constructor
-   * \param key The indexing key
-   * \param args Other arguments
-   * \return ListNode that associated with the key, no matter whether it already exists
-   */
-  template <typename Key, typename... Args>
-  ListNode Emplace(Key&& key, Args&&... args) {
-    ReHashIfNone();
+  bool TryInsert(const key_type& k, ListNode* result) {
+    if (slots_ == 0) {
+      return false;
+    }
     // required that `m` to be the head of a linked list through which we can iterator
-    ListNode m = FromHash(ObjectHash()(key));
+    ListNode m = FromHash(ObjectHash()(k));
     // `m` can be: 1) empty; 2) body of an irrelevant list; 3) head of the relevant list
     // Case 1: empty
     if (m.IsEmpty()) {
-      KVType v(std::forward<Key>(key), std::forward<Args>(args)...);
-      m.NewHead(std::move(v));
+      m.NewHead(KVType(k, nullptr));
       this->size_ += 1;
-      return m;
+      *result = m;
+      return true;
     }
     // Case 2: body of an irrelevant list
     if (!m.IsHead()) {
-      // we move the elements around and construct the single-elements linked list
-      return SpareListHead(std::move(m), std::forward<Key>(key), std::forward<Args>(args)...);
+      // we move the elements around and construct the single-element linked list
+      return IsFull() ? false : TrySpareListHead(m, k, result);
     }
     // Case 3: head of the relevant list
     // we iterate through the linked list until the end
     ListNode n = m;
     do {
       // find equal item, do not insert
-      if (ObjectEqual()(key, n.Key())) {
-        return n;
+      if (ObjectEqual()(k, n.Key())) {
+        *result = n;
+        return true;
       }
       // make sure `m` is the previous element of `n`
       m = n;
     } while (n.MoveToNext(this));
     // `m` is the tail of the linked list
     // always check capacity before insertion
-    if (ReHashIfFull()) {
-      return Emplace(std::forward<Key>(key), std::forward<Args>(args)...);
+    if (IsFull()) {
+      return false;
     }
+    // find the next empty slot
     uint8_t jump;
-    ListNode empty;
-    // rehash if there is no empty space after `m`
-    if (ReHashIfNoNextEmpty(m, &empty, &jump)) {
-      return Emplace(std::forward<Key>(key), std::forward<Args>(args)...);
+    if (!m.GetNextEmpty(this, &jump, result)) {
+      return false;
     }
-    KVType v(std::forward<Key>(key), std::forward<Args>(args)...);
-    empty.NewTail(std::move(v));
+    result->NewTail(KVType(k, nullptr));
     // link `n` to `empty`, and move forward
     m.SetJump(jump);
     this->size_ += 1;
-    return empty;
+    return true;
   }
 
   /*!
    * \brief Spare an entry to be the head of a linked list
-   * \tparam Args Type of the arguments fed to the constructor
    * \param n The given entry to be spared
-   * \param args The arguments
-   * \return ListNode that associated with the head
+   * \param k The indexing key
+   * \param result The linked-list entry constructed as the head
+   * \return A boolean, if actual insertion happens
    */
-  template <typename... Args>
-  ListNode SpareListHead(ListNode n, Args&&... args) {
+  bool TrySpareListHead(ListNode n, const key_type& k, ListNode* result) {
     // `n` is not the head of the linked list
     // move the original item of `n` (if any)
     // and construct new item on the position `n`
-    if (ReHashIfFull()) {
-      // always check capacity before insertion
-      return Emplace(std::forward<Args>(args)...);
-    }
     // To make `n` empty, we
     // 1) find `w` the previous element of `n` in the linked list
     // 2) copy the linked list starting from `r = n`
@@ -1877,8 +1858,8 @@ class MapNode : public BaseMapNode {
     do {
       // `jump` describes how `w` is jumped to `empty`
       // rehash if there is no empty space after `w`
-      if (ReHashIfNoNextEmpty(w, &empty, &jump)) {
-        return Emplace(std::forward<Args>(args)...);
+      if (!w.GetNextEmpty(this, &jump, &empty)) {
+        return false;
       }
       // move `r` to `empty`
       empty.NewTail(std::move(r.Data()));
@@ -1897,11 +1878,17 @@ class MapNode : public BaseMapNode {
     } while (r.MoveToNext(this, r_meta));
     // finally we have done moving the linked list
     // fill data_ into `n`
-    KVType v(std::forward<Args>(args)...);
-    n.NewHead(std::move(v));
+    n.NewHead(KVType(k, nullptr));
     this->size_ += 1;
-    return n;
+    *result = n;
+    return true;
   }
+
+  /*!
+   * \brief Check whether the hash table is full
+   * \return A boolean indicating whether hash table is full
+   */
+  bool IsFull() const { return size_ + 1 > (slots_ + 1) * kMaxLoadFactor; }
 
   /*!
    * \brief Remove a ListNode
@@ -1938,16 +1925,6 @@ class MapNode : public BaseMapNode {
     }
   }
 
-  /*!
-   * \brief Reserve some space
-   * \param count The space to be reserved
-   */
-  void Reserve(uint64_t count) {
-    if (slots_ < count * 2) {
-      ReHash(count * 2);
-    }
-  }
-
   /*! \brief Clear the container to empty, release all memory acquired */
   void Reset() {
     this->ReleaseItems();
@@ -1977,72 +1954,6 @@ class MapNode : public BaseMapNode {
   }
 
   /*!
-   * \brief Re-hashing with the given required capacity
-   * \param required The lower bound of capacity required
-   */
-  void ReHash(uint64_t required) {
-    constexpr uint64_t one = 1;
-    uint64_t new_n_slots = static_cast<uint64_t>(required / kMaxLoadFactor) + 1;
-    new_n_slots = std::max(new_n_slots, required);
-    if (new_n_slots <= 0) {
-      return;
-    }
-    uint32_t new_fib_shift = __builtin_clzll(new_n_slots);
-    new_n_slots = one << (64 - new_fib_shift);
-    if (new_n_slots <= slots_ + 1) {
-      return;
-    }
-    ObjectPtr<MapNode> p = MoveFrom(new_fib_shift, new_n_slots, this);
-    std::swap(p->data_, this->data_);
-    std::swap(p->slots_, this->slots_);
-    std::swap(p->size_, this->size_);
-    std::swap(p->fib_shift_, this->fib_shift_);
-  }
-
-  /*!
-   * \brief Re-hashing if the container is empty
-   * \return If re-hashing happens
-   */
-  bool ReHashIfNone() {
-    constexpr uint64_t min_size = 7;
-    if (slots_ == 0) {
-      ReHash(min_size);
-      return true;
-    }
-    return false;
-  }
-
-  /*!
-   * \brief Re-hashing if the container achieves max load factor
-   * \return If re-hashing happens
-   */
-  bool ReHashIfFull() {
-    constexpr uint64_t min_size = 7;
-    if (slots_ == 0 || size_ + 1 > (slots_ + 1) * kMaxLoadFactor) {
-      ReHash(std::max(min_size, size_ + 1));
-      return true;
-    }
-    return false;
-  }
-
-  /*!
-   * \brief Re-hashing if cannot find space for the linked-list
-   * \param n Find the next empty element of this node
-   * \param empty The resulting empty element
-   * \param jump Jump required to the empty element
-   * \return If re-hashing happens
-   */
-  bool ReHashIfNoNextEmpty(const ListNode& n, ListNode* empty, uint8_t* jump) {
-    constexpr uint64_t min_size = 7;
-    *empty = n.GetNextEmpty(this, jump);
-    if (empty->IsNone()) {
-      ReHash(std::max(min_size, slots_ * 2 + 1));
-      return true;
-    }
-    return false;
-  }
-
-  /*!
    * \brief Create an empty container
    * \return The object created
    */
@@ -2058,13 +1969,15 @@ class MapNode : public BaseMapNode {
   /*!
    * \brief Create an empty container
    * \param fib_shift The fib shift provided
-   * \param n_slots Number of slots required
+   * \param n_slots Number of slots required, should be power-of-two
    * \return The object created
    */
   static ObjectPtr<MapNode> Empty(uint32_t fib_shift, uint64_t n_slots) {
+    CHECK((n_slots & -(n_slots)) == n_slots);
     if (n_slots == 0) {
       return Empty();
     }
+    std::cout << "fib_shift = " << int(fib_shift) << ", n_slots = " << n_slots << std::endl;
     ObjectPtr<MapNode> p = make_object<MapNode>();
     uint64_t n_blocks = CalcNumBlocks(n_slots - 1);
     Block* block = p->data_ = new Block[n_blocks];
@@ -2078,40 +1991,14 @@ class MapNode : public BaseMapNode {
   }
 
   /*!
-   * \brief Create an empty container with elements moving from another MapNode
-   * \param fib_shift The fib shift provided
-   * \param n_slots Number of slots required
-   * \param m The source container
-   * \return The object created
-   */
-  static ObjectPtr<MapNode> MoveFrom(uint32_t fib_shift, uint64_t n_slots, MapNode* m) {
-    ObjectPtr<MapNode> p = MapNode::Empty(fib_shift, n_slots);
-    uint64_t n_blocks = CalcNumBlocks(m->slots_);
-    for (uint64_t bi = 0; bi < n_blocks; ++bi) {
-      uint8_t* m_m = m->data_[bi].b;
-      KVType* m_d = reinterpret_cast<KVType*>(m->data_[bi].b + kBlockCap);
-      for (int j = 0; j < kBlockCap; ++j, ++m_m, ++m_d) {
-        uint8_t& meta = *m_m;
-        if (meta != uint8_t(kProtectedSlot) && meta != uint8_t(kEmptySlot)) {
-          meta = uint8_t(kEmptySlot);
-          p->Emplace(std::move(m_d->k), std::move(m_d->v));
-        }
-      }
-    }
-    delete[] m->data_;
-    m->data_ = nullptr;
-    m->slots_ = 0;
-    m->size_ = 0;
-    m->fib_shift_ = 0;
-    return p;
-  }
-
-  /*!
    * \brief Create an empty container with elements copying from another MapNode
    * \param m The source container
    * \return The object created
    */
   static ObjectPtr<MapNode> CopyFrom(MapNode* m) {
+    if (m == nullptr) {
+      return MapNode::Empty();
+    }
     ObjectPtr<MapNode> p = make_object<MapNode>();
     uint64_t n_blocks = CalcNumBlocks(m->slots_);
     p->data_ = new Block[n_blocks];
@@ -2134,6 +2021,43 @@ class MapNode : public BaseMapNode {
     return p;
   }
 
+  /*!
+   * \brief Insert an entry into the given hash map
+   * \param kv The entry to be inserted
+   * \param map The pointer to the map, can be changed if re-hashing happens
+   */
+  static void Insert(const KVType& kv, ObjectPtr<Object>* map) {
+    MapNode* m = static_cast<MapNode*>(map->get());
+    MapNode::ListNode n;
+    if (m->TryInsert(kv.k, &n)) {
+      n.Val() = kv.v;
+      return;
+    }
+    ObjectPtr<Object> p =
+        m->slots_ == 0 ? Empty(59, 32) : Empty(m->fib_shift_ - 1, m->slots_ * 2 + 2);
+    Insert(kv, &p);
+    uint64_t n_blocks = CalcNumBlocks(m->slots_);
+    for (uint64_t bi = 0; bi < n_blocks; ++bi) {
+      uint8_t* m_m = m->data_[bi].b;
+      KVType* m_d = reinterpret_cast<KVType*>(m->data_[bi].b + kBlockCap);
+      for (int j = 0; j < kBlockCap; ++j, ++m_m, ++m_d) {
+        uint8_t& meta = *m_m;
+        if (meta != uint8_t(kProtectedSlot) && meta != uint8_t(kEmptySlot)) {
+          meta = uint8_t(kEmptySlot);
+          KVType kv = std::move(*m_d);
+          Insert(kv, &p);
+        }
+      }
+    }
+    delete[] m->data_;
+    CHECK((static_cast<MapNode*>(p.get()))->size_ == m->size_ + 1);
+    m->data_ = nullptr;
+    m->slots_ = 0;
+    m->size_ = 0;
+    m->fib_shift_ = 63;
+    *map = p;
+  }
+
   /*! \brief Construct from hash code */
   ListNode FromHash(uint64_t hash_value) const {
     return ListNode(FibHash(hash_value, fib_shift_), this);
@@ -2145,14 +2069,15 @@ class MapNode : public BaseMapNode {
     return n.IsHead() ? n : ListNode();
   }
 
+  /*! \brief Construct the number of blocks in the hash table */
   static uint64_t CalcNumBlocks(uint64_t n_slots_m1) {
     uint64_t n_slots = n_slots_m1 > 0 ? n_slots_m1 + 1 : 0;
     return (n_slots + kBlockCap - 1) / kBlockCap;
   }
 
+  /*! \brief Fibonacci Hashing, maps a hash code to an index in a power-of-2-sized table. */
   static uint64_t FibHash(uint64_t hash_value, uint32_t fib_shift) {
-    // Fibonacci Hashing. See also:
-    // https://programmingpraxis.com/2018/06/19/fibonacci-hash/
+    // See also: https://programmingpraxis.com/2018/06/19/fibonacci-hash/
     constexpr uint64_t coeff = 11400714819323198485ull;
     return (coeff * hash_value) >> fib_shift;
   }
@@ -2193,12 +2118,12 @@ class MapNode : public BaseMapNode {
     /*! \brief Set the entry's jump to its next entry */
     void SetJump(uint8_t jump) const { (Meta() &= 0b10000000) |= jump; }
     /*! \brief Construct a head of linked list in-place */
-    void NewHead(KVType&& v) const {
+    void NewHead(KVType v) const {
       Meta() = 0b00000000;
       new (&Data()) KVType(std::move(v));
     }
     /*! \brief Construct a tail of linked list in-place */
-    void NewTail(KVType&& v) const {
+    void NewTail(KVType v) const {
       Meta() = 0b10000000;
       new (&Data()) KVType(std::move(v));
     }
@@ -2229,16 +2154,16 @@ class MapNode : public BaseMapNode {
       return m;
     }
     /*! \brief Get the next empty jump */
-    ListNode GetNextEmpty(const MapNode* self, uint8_t* jump) const {
+    bool GetNextEmpty(const MapNode* self, uint8_t* jump, ListNode* result) const {
       for (uint8_t idx = 1; idx < kNumJumpDists; ++idx) {
         ListNode n((i + kJumpDists[idx]) & (self->slots_), self);
         if (n.IsEmpty()) {
           *jump = idx;
-          return n;
+          *result = n;
+          return true;
         }
       }
-      *jump = 0;
-      return ListNode();
+      return false;
     }
     /*! \brief Index on the real array */
     uint64_t i;
@@ -2493,7 +2418,8 @@ class Map : public ObjectRef {
    * \param value The value to be setted.
    */
   void Set(const K& key, const V& value) {
-    CopyOnWrite()->Emplace(key, ObjectRef(nullptr)).Val() = value;
+    CopyOnWrite();
+    MapNode::Insert(MapNode::KVType(key, value), &data_);
   }
   /*! \return begin iterator */
   iterator begin() const { return iterator(GetMapNode()->begin()); }
@@ -2544,18 +2470,26 @@ class Map : public ObjectRef {
 
  private:
   /*!
-   * \brief reset the array to content from iterator.
-   * \param first begin of iterator
-   * \param last end of iterator
+   * \brief Reset the map using contents from the given iterators.
+   * \param first Begin of iterator
+   * \param last End of iterator
    * \tparam IterType The type of iterator
    */
   template <typename IterType>
   void Assign(IterType first, IterType last) {
     int64_t cap = std::distance(first, last);
-    ObjectPtr<MapNode> n = MapNode::Empty();
-    n->Reserve(cap);
+    if (cap <= 0) {
+      data_ = MapNode::Empty();
+      return;
+    }
+    uint32_t fib_shift = 64;
+    uint64_t n_slots = 1;
+    for (; cap; fib_shift -= 1, n_slots <<= 1, cap >>= 1)
+      ;
+    ObjectPtr<Object> n = MapNode::Empty(fib_shift - 1, n_slots << 1);
     for (; first != last; ++first) {
-      n->Emplace(*first);
+      MapNode::KVType kv(*first);
+      MapNode::Insert(kv, &n);
     }
     data_ = std::move(n);
   }
