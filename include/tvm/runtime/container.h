@@ -1647,6 +1647,51 @@ class BaseMapNode : public Object {
   static_assert(sizeof(KVType) == 16 || sizeof(KVType) == 8, "sizeof(KVType) incorrect");
   static_assert(std::is_standard_layout<KVType>::value, "KVType is not standard layout");
 
+  class iterator {
+   public:
+    using iterator_category = std::bidirectional_iterator_tag;
+    using difference_type = int64_t;
+    using value_type = KVType;
+    using pointer = KVType*;
+    using reference = KVType&;
+    /*! \brief Default constructor */
+    iterator() : i(0), self(nullptr) {}
+    /*! \brief Compare iterators */
+    bool operator==(const iterator& other) const { return i == other.i && self == other.self; }
+    /*! \brief Compare iterators */
+    bool operator!=(const iterator& other) const { return !(*this == other); }
+    /*! \brief De-reference iterators */
+    pointer operator->() const;
+    /*! \brief De-reference iterators */
+    reference operator*() const { return *((*this).operator->()); }
+    /*! \brief Prefix self increment, e.g. ++iter */
+    iterator& operator++();
+    /*! \brief Prefix self decrement, e.g. --iter */
+    iterator& operator--();
+    /*! \brief Suffix self increment */
+    iterator operator++(int) {
+      iterator copy = *this;
+      ++(*this);
+      return copy;
+    }
+    /*! \brief Suffix self decrement */
+    iterator operator--(int) {
+      iterator copy = *this;
+      --(*this);
+      return copy;
+    }
+
+   protected:
+    /*! \brief Construct by value */
+    iterator(uint64_t i, const BaseMapNode* self) : i(i), self(self) {}
+    /*! \brief The position on the array */
+    uint64_t i;
+    /*! \brief The container it points to */
+    const BaseMapNode* self;
+
+    friend class MapNode;
+  };
+
   /*! \brief number of slots minus 1 */
   uint64_t slots_;
   /*! \brief number of entries in the container */
@@ -1677,11 +1722,14 @@ class MapNode : public BaseMapNode {
   struct Block;
   struct ListNode;
 
+  // Reference class
   template <typename, typename, typename, typename>
-  friend class Map;  // reference class
+  friend class Map;
+  // Parent class
+  friend class BaseMapNode;
 
  public:
-  class iterator;
+  using BaseMapNode::iterator;
 
   /*!
    * \brief Destroy the MapNode
@@ -1710,10 +1758,20 @@ class MapNode : public BaseMapNode {
   mapped_type& at(const key_type& key) { return At(key); }
 
   /*! \return begin iterator */
-  iterator begin() const { return size_ == 0 ? iterator() : iterator(0, this); }
+  iterator begin() const {
+    if (slots_ == 0) {
+      return iterator(0, this);
+    }
+    for (uint64_t i = 0; i <= slots_; ++i) {
+      if (!ListNode(i, this).IsEmpty()) {
+        return iterator(i, this);
+      }
+    }
+    return iterator(slots_ + 1, this);
+  }
 
   /*! \return end iterator */
-  iterator end() const { return size_ == 0 ? iterator() : iterator(slots_ + 1, this); }
+  iterator end() const { return slots_ == 0 ? iterator(0, this) : iterator(slots_ + 1, this); }
 
   /*!
    * \brief Index value associated with a key
@@ -2079,6 +2137,9 @@ class MapNode : public BaseMapNode {
     uint8_t b[kBlockCap + kBlockCap * sizeof(KVType)];
   };
 
+  static_assert(sizeof(Block) == kBlockCap * (sizeof(KVType) + 1), "sizeof(Block) incorrect");
+  static_assert(std::is_standard_layout<Block>::value, "Block is not standard layout");
+
   /*! \brief The implicit in-place linked list used to index a chain */
   struct ListNode {
     /*! \brief Construct None */
@@ -2163,100 +2224,25 @@ class MapNode : public BaseMapNode {
     Block* cur;
   };
 
-  /*!
-   * \brief The base implementation of hash map iterator
-   * \tparam T The child class in CRTP
-   */
-  template <class T>
-  class IteratorBase {
-   public:
-    using iterator_category = std::bidirectional_iterator_tag;
-    using difference_type = int64_t;
-    using value_type = KVType;
-    using pointer = KVType*;
-    using reference = KVType&;
-    /*! \brief Default constructor */
-    IteratorBase() : i(0), self(nullptr) {}
-    /*! \brief Compare iterators */
-    bool operator==(const T& other) const { return i == other.i && self == other.self; }
-    /*! \brief Compare iterators */
-    bool operator!=(const T& other) const { return !(*this == other); }
-    /*! \brief De-reference iterators */
-    reference operator*() const { return ListNode(i, self).Data(); }
-    /*! \brief Pointer-to of iterators */
-    pointer operator->() const { return &ListNode(i, self).Data(); }
-    /*! \brief Prefix self increment */
-    T& operator++() {
-      if (self == nullptr || i > self->slots_) {
-        return static_cast<T&>(*this);
-      }
-      for (++i; i <= self->slots_; ++i) {
-        if (!ListNode(i, self).IsEmpty()) {
-          return static_cast<T&>(*this);
-        }
-      }
-      return static_cast<T&>(*this);
-    }
-    /*! \brief Prefix self decrement */
-    T& operator--() {
-      if (self == nullptr || i > self->slots_ + 1) {
-        return static_cast<T&>(*this);
-      }
-      while (i-- != 0) {
-        if (!ListNode(i, self).IsEmpty()) {
-          return static_cast<T&>(*this);
-        }
-      }
-      i = self->slots_ + 1;
-      return static_cast<T&>(*this);
-    }
-    /*! \brief Suffix self increment */
-    T operator++(int) {
-      T copy = static_cast<T&>(*this);
-      ++(*this);
-      return copy;
-    }
-    /*! \brief Suffix self decrement */
-    T operator--(int) {
-      T copy = static_cast<T&>(*this);
-      --(*this);
-      return copy;
-    }
-    /*! \brief Constructor */
-    IteratorBase(uint64_t _i, const MapNode* _self) : i(_i), self(_self) {
-      if (self != nullptr) {
-        for (; i <= self->slots_; ++i) {
-          if (!ListNode(i, self).IsEmpty()) {
-            break;
-          }
-        }
+  uint64_t IncItr(uint64_t i) const {
+    for (++i; i <= slots_; ++i) {
+      if (!ListNode(i, this).IsEmpty()) {
+        return i;
       }
     }
-    /*! \brief The position on the array */
-    uint64_t i;
-    /*! \brief The container it points to */
-    const MapNode* self;
-  };
+    return slots_ + 1;
+  }
 
-  static_assert(sizeof(Block) == kBlockCap * (sizeof(KVType) + 1), "sizeof(Block) incorrect");
-  static_assert(std::is_standard_layout<Block>::value, "Block is not standard layout");
+  uint64_t DecItr(uint64_t i) const {
+    while (i-- != 0) {
+      if (!ListNode(i, this).IsEmpty()) {
+        return i;
+      }
+    }
+    return slots_ + 1;
+  }
 
- public:
-  /*! \brief The iterator of hash map */
-  class iterator : public IteratorBase<iterator> {
-   public:
-    using iterator_category = std::bidirectional_iterator_tag;
-    using difference_type = int64_t;
-    using value_type = typename KVType::TStl;
-    using pointer = value_type*;
-    using reference = value_type&;
-
-    iterator() = default;
-
-   private:
-    iterator(uint64_t i, const MapNode* self) : IteratorBase(i, self) {}
-    friend class MapNode;
-  };
+  KVType* DeRefItr(uint64_t i) const { return &ListNode(i, this).Data(); }
 
  protected:
   /*! \brief fib shift in Fibonacci Hashing */
@@ -2292,6 +2278,23 @@ class MapNode : public BaseMapNode {
   };
   /* clang-format on */
 };
+
+inline BaseMapNode::iterator::pointer BaseMapNode::iterator::operator->() const {
+  const MapNode* p = static_cast<const MapNode*>(self);
+  return p->DeRefItr(i);
+}
+
+inline BaseMapNode::iterator& BaseMapNode::iterator::operator++() {
+  const MapNode* p = static_cast<const MapNode*>(self);
+  i = p->IncItr(i);
+  return *this;
+}
+
+inline BaseMapNode::iterator& BaseMapNode::iterator::operator--() {
+  const MapNode* p = static_cast<const MapNode*>(self);
+  i = p->DecItr(i);
+  return *this;
+}
 
 /*!
  * \brief Map container of NodeRef->NodeRef in DSL graph.
@@ -2437,7 +2440,7 @@ class Map : public ObjectRef {
   using ContainerType = MapNode;
 
   /*! \brief Iterator of the hash map */
-  class iterator : public MapNode::IteratorBase<iterator> {
+  class iterator {
    public:
     using iterator_category = std::bidirectional_iterator_tag;
     using difference_type = int64_t;
@@ -2445,19 +2448,50 @@ class Map : public ObjectRef {
     using pointer = void;
     using reference = value_type;
 
-    iterator() : MapNode::IteratorBase<iterator>() {}
+    iterator() : itr() {}
 
-    value_type operator*() const {
-      MapNode::ListNode n(this->i, this->self);
-      return std::make_pair(DowncastNoCheck<K>(n.Key()), DowncastNoCheck<V>(n.Val()));
+    /*! \brief Compare iterators */
+    bool operator==(const iterator& other) const { return itr == other.itr; }
+    /*! \brief Compare iterators */
+    bool operator!=(const iterator& other) const { return itr != other.itr; }
+    /*! \brief De-reference iterators is not allowed */
+    pointer operator->() const = delete;
+    /*! \brief De-reference iterators */
+    reference operator*() const {
+      BaseMapNode::KVType& kv = *itr;
+      return std::make_pair(DowncastNoCheck<K>(kv.k), DowncastNoCheck<V>(kv.v));
+    }
+    /*! \brief Prefix self increment, e.g. ++iter */
+    iterator& operator++() {
+      ++itr;
+      return *this;
+    }
+    /*! \brief Prefix self decrement, e.g. --iter */
+    iterator& operator--() {
+      --itr;
+      return *this;
+    }
+    /*! \brief Suffix self increment */
+    iterator operator++(int) {
+      iterator copy = *this;
+      ++(*this);
+      return copy;
+    }
+    /*! \brief Suffix self decrement */
+    iterator operator--(int) {
+      iterator copy = *this;
+      --(*this);
+      return copy;
     }
 
    private:
-    iterator(const MapNode::iterator& itr)  // NOLINT(*)
-        : MapNode::IteratorBase<iterator>(itr.i, itr.self) {}
+    iterator(const BaseMapNode::iterator& itr)  // NOLINT(*)
+        : itr(itr) {}
 
     template <typename, typename, typename, typename>
     friend class Map;
+
+    BaseMapNode::iterator itr;
   };
 
  private:
