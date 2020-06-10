@@ -1970,7 +1970,6 @@ class MapNode : public BaseMapNode {
     if (n_slots == 0) {
       return Empty();
     }
-    std::cout << "fib_shift = " << int(fib_shift) << ", n_slots = " << n_slots << std::endl;
     ObjectPtr<MapNode> p = make_object<MapNode>();
     uint64_t n_blocks = CalcNumBlocks(n_slots - 1);
     Block* block = p->data_ = new Block[n_blocks];
