@@ -2477,8 +2477,8 @@ class Map : public ObjectRef {
     }
     uint32_t fib_shift = 64;
     uint64_t n_slots = 1;
-    for (; cap; fib_shift -= 1, n_slots <<= 1, cap >>= 1)
-      ;
+    for (; cap; fib_shift -= 1, n_slots <<= 1, cap >>= 1) {
+    }
     ObjectPtr<Object> n = MapNode::Empty(fib_shift - 1, n_slots << 1);
     for (; first != last; ++first) {
       MapNode::KVType kv(*first);
