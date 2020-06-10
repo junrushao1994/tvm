@@ -1623,29 +1623,9 @@ class BaseMapNode : public Object {
   size_t size() const { return size_; }
 
  protected:
-  /*! \brief Alternative to std::pair with standard layout */
-  struct KVType {
-    template <class K, class V>
-    KVType(const K& k, const V& v) : k(k), v(v) {}
-    template <class K, class V>
-    KVType(K&& k, V&& v) : k(std::forward<K>(k)), v(std::forward<V>(v)) {}
-    template <class K, class V>
-    KVType(const K& k, V&& v) : k(k), v(std::forward<V>(v)) {}
-    template <class K, class V>
-    KVType(K&& k, const V& v) : k(std::forward<K>(k)), v(v) {}
-    /*! \brief The STL type */
-    using TStl = std::pair<key_type, mapped_type>;
-    /*! \brief Converting from STL type */
-    KVType(const TStl& kv) : k(kv.first), v(kv.second) {}  // NOLINT(*)
-    /*! \brief Converting to STL type */
-    operator TStl() const { return std::make_pair(k, v); }
-    /*! \brief The key, or std::pair::first */
-    key_type k;
-    /*! \brief The value, or std::pair::second */
-    mapped_type v;
-  };
-  static_assert(sizeof(KVType) == 16 || sizeof(KVType) == 8, "sizeof(KVType) incorrect");
+  using KVType = std::pair<ObjectRef, ObjectRef>;
   static_assert(std::is_standard_layout<KVType>::value, "KVType is not standard layout");
+  static_assert(sizeof(KVType) == 16 || sizeof(KVType) == 8, "sizeof(KVType) incorrect");
 
   class iterator {
    public:
@@ -2079,8 +2059,8 @@ class MapNode : public BaseMapNode {
   static void Insert(const KVType& kv, ObjectPtr<Object>* map) {
     MapNode* m = static_cast<MapNode*>(map->get());
     MapNode::ListNode n;
-    if (m->TryInsert(kv.k, &n)) {
-      n.Val() = kv.v;
+    if (m->TryInsert(kv.first, &n)) {
+      n.Val() = kv.second;
       return;
     }
     ObjectPtr<Object> p =
@@ -2153,9 +2133,9 @@ class MapNode : public BaseMapNode {
       return *(reinterpret_cast<KVType*>(cur->b + kBlockCap + (i % kBlockCap) * sizeof(KVType)));
     }
     /*! \brief Key on the entry */
-    key_type& Key() const { return Data().k; }
+    key_type& Key() const { return Data().first; }
     /*! \brief Value on the entry */
-    mapped_type& Val() const { return Data().v; }
+    mapped_type& Val() const { return Data().second; }
     /*! \brief If the entry is head of linked list */
     bool IsHead() const { return (Meta() & 0b10000000) == 0b00000000; }
     /*! \brief If the entry is none */
@@ -2445,7 +2425,7 @@ class Map : public ObjectRef {
     using iterator_category = std::bidirectional_iterator_tag;
     using difference_type = int64_t;
     using value_type = const std::pair<K, V>;
-    using pointer = void;
+    using pointer = value_type*;
     using reference = value_type;
 
     iterator() : itr() {}
@@ -2459,7 +2439,7 @@ class Map : public ObjectRef {
     /*! \brief De-reference iterators */
     reference operator*() const {
       BaseMapNode::KVType& kv = *itr;
-      return std::make_pair(DowncastNoCheck<K>(kv.k), DowncastNoCheck<V>(kv.v));
+      return std::make_pair(DowncastNoCheck<K>(kv.first), DowncastNoCheck<V>(kv.second));
     }
     /*! \brief Prefix self increment, e.g. ++iter */
     iterator& operator++() {

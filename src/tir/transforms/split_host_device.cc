@@ -278,9 +278,9 @@ Pass SplitHostDevice() {
     IRModule device_mod = IRModule();
 
     for (auto& kv : *func_dict) {
-      if (kv.v->IsInstance<PrimFuncNode>()) {
-        PrimFunc func = Downcast<PrimFunc>(std::move(kv.v));
-        kv.v = SplitHostDevice(std::move(func), &device_mod);
+      if (kv.second->IsInstance<PrimFuncNode>()) {
+        PrimFunc func = Downcast<PrimFunc>(std::move(kv.second));
+        kv.second = SplitHostDevice(std::move(func), &device_mod);
       }
     }
     mod->Update(device_mod);

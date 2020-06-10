@@ -77,8 +77,8 @@ struct ObjectTypeChecker<Map<K, V> > {
     if (!ptr->IsInstance<MapNode>()) return false;
     const MapNode* n = static_cast<const MapNode*>(ptr);
     for (const auto& kv : *n) {
-      if (!ObjectTypeChecker<K>::Check(kv.k.get())) return false;
-      if (!ObjectTypeChecker<V>::Check(kv.v.get())) return false;
+      if (!ObjectTypeChecker<K>::Check(kv.first.get())) return false;
+      if (!ObjectTypeChecker<V>::Check(kv.second.get())) return false;
     }
     return true;
   }
