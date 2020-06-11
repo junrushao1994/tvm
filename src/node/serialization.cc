@@ -108,8 +108,8 @@ class NodeIndexer : public AttrVisitor {
       for (const auto& sp : *n) {
         MakeIndex(const_cast<Object*>(sp.get()));
       }
-    } else if (node->IsInstance<MapNode>()) {
-      MapNode* n = static_cast<MapNode*>(node);
+    } else if (node->IsInstance<BaseMapNode>()) {
+      BaseMapNode* n = static_cast<BaseMapNode*>(node);
       bool is_str_map = std::all_of(n->begin(), n->end(), [](const auto& v) {
         return v.first->template IsInstance<StringObj>();
       });
@@ -253,8 +253,8 @@ class JSONAttrGetter : public AttrVisitor {
       for (size_t i = 0; i < n->size(); ++i) {
         node_->data.push_back(node_index_->at(const_cast<Object*>(n->at(i).get())));
       }
-    } else if (node->IsInstance<MapNode>()) {
-      MapNode* n = static_cast<MapNode*>(node);
+    } else if (node->IsInstance<BaseMapNode>()) {
+      BaseMapNode* n = static_cast<BaseMapNode*>(node);
       bool is_str_map = std::all_of(n->begin(), n->end(), [](const auto& v) {
         return v.first->template IsInstance<StringObj>();
       });
@@ -320,7 +320,7 @@ class FieldDependencyFinder : public AttrVisitor {
       return;
     }
     // Skip containers
-    if (jnode->type_key == ArrayNode::_type_key || jnode->type_key == MapNode::_type_key) {
+    if (jnode->type_key == ArrayNode::_type_key || jnode->type_key == BaseMapNode::_type_key) {
       return;
     }
     jnode_ = jnode;
@@ -398,7 +398,7 @@ class JSONAttrSetter : public AttrVisitor {
       return;
     }
     // handling Map
-    if (jnode->type_key == MapNode::_type_key) {
+    if (jnode->type_key == BaseMapNode::_type_key) {
       std::unordered_map<ObjectRef, ObjectRef, ObjectHash, ObjectEqual> n;
       if (jnode->keys.empty()) {
         CHECK_EQ(jnode->data.size() % 2, 0U);

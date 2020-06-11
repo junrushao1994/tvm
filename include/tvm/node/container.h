@@ -38,7 +38,7 @@ using runtime::Downcast;
 using runtime::IterAdapter;
 using runtime::make_object;
 using runtime::Map;
-using runtime::MapNode;
+using runtime::BaseMapNode;
 using runtime::Object;
 using runtime::ObjectEqual;
 using runtime::ObjectHash;
@@ -74,8 +74,8 @@ template <typename K, typename V>
 struct ObjectTypeChecker<Map<K, V> > {
   static bool Check(const Object* ptr) {
     if (ptr == nullptr) return true;
-    if (!ptr->IsInstance<MapNode>()) return false;
-    const MapNode* n = static_cast<const MapNode*>(ptr);
+    if (!ptr->IsInstance<BaseMapNode>()) return false;
+    const BaseMapNode* n = static_cast<const BaseMapNode*>(ptr);
     for (const auto& kv : *n) {
       if (!ObjectTypeChecker<K>::Check(kv.first.get())) return false;
       if (!ObjectTypeChecker<V>::Check(kv.second.get())) return false;

@@ -1611,6 +1611,13 @@ class BaseMapNode : public Object {
   using key_type = ObjectRef;
   /*! \brief Type of the values in the hash map */
   using mapped_type = ObjectRef;
+  /*! \brief Type of value stored in the hash map */
+  using KVType = std::pair<ObjectRef, ObjectRef>;
+  /*! \brief Iterator class */
+  class iterator;
+
+  static_assert(std::is_standard_layout<KVType>::value, "KVType is not standard layout");
+  static_assert(sizeof(KVType) == 16 || sizeof(KVType) == 8, "sizeof(KVType) incorrect");
 
   static constexpr const uint32_t _type_index = TypeIndex::kRuntimeMap;
   static constexpr const char* _type_key = "Map";
@@ -1621,11 +1628,44 @@ class BaseMapNode : public Object {
    * \return The result
    */
   size_t size() const { return size_; }
-
- protected:
-  using KVType = std::pair<ObjectRef, ObjectRef>;
-  static_assert(std::is_standard_layout<KVType>::value, "KVType is not standard layout");
-  static_assert(sizeof(KVType) == 16 || sizeof(KVType) == 8, "sizeof(KVType) incorrect");
+  /*!
+   * \brief Count the number of times a key exists in the MapNode
+   * \param key The indexing key
+   * \return The result, 0 or 1
+   */
+  size_t count(const key_type& key) const;
+  /*!
+   * \brief Index value associated with a key, throw exception if the key does not exist
+   * \param key The indexing key
+   * \return The const reference to the value
+   */
+  const mapped_type& at(const key_type& key) const;
+  /*!
+   * \brief Index value associated with a key, throw exception if the key does not exist
+   * \param key The indexing key
+   * \return The mutable reference to the value
+   */
+  mapped_type& at(const key_type& key);
+  /*! \return begin iterator */
+  iterator begin() const;
+  /*! \return end iterator */
+  iterator end() const;
+  /*!
+   * \brief Index value associated with a key
+   * \param key The indexing key
+   * \return The iterator of the entry associated with the key, end iterator if not exists
+   */
+  iterator find(const key_type& key) const;
+  /*!
+   * \brief Erase the entry associated with the iterator
+   * \param position The iterator
+   */
+  void erase(const iterator& position);
+  /*!
+   * \brief Erase the entry associated with the key, do nothing if not exists
+   * \param key The indexing key
+   */
+  void erase(const key_type& key) { erase(find(key)); }
 
   class iterator {
    public:
@@ -1672,11 +1712,37 @@ class BaseMapNode : public Object {
     friend class MapNode;
   };
 
+ protected:
+  /*!
+   * \brief Create an empty container
+   * \return The object created
+   */
+  static ObjectPtr<BaseMapNode> Empty();
+  /*!
+   * \brief Create the map using contents from the given iterators.
+   * \param first Begin of iterator
+   * \param last End of iterator
+   * \tparam IterType The type of iterator
+   * \return ObjectPtr to the map created
+   */
+  template <typename IterType>
+  static ObjectPtr<Object> CreateFromRange(IterType first, IterType last);
+  /*!
+   * \brief Insert an entry into the given hash map
+   * \param kv The entry to be inserted
+   * \param map The pointer to the map, can be changed if re-hashing happens
+   */
+  static void Insert(const KVType& kv, ObjectPtr<Object>* map);
+  /*!
+   * \brief Create an empty container with elements copying from another MapNode
+   * \param m The source container
+   * \return The object created
+   */
+  static ObjectPtr<BaseMapNode> CopyFrom(BaseMapNode* m);
   /*! \brief number of slots minus 1 */
   uint64_t slots_;
   /*! \brief number of entries in the container */
   uint64_t size_;
-
   // Reference class
   template <typename, typename, typename, typename>
   friend class Map;
@@ -1702,9 +1768,6 @@ class MapNode : public BaseMapNode {
   struct Block;
   struct ListNode;
 
-  // Reference class
-  template <typename, typename, typename, typename>
-  friend class Map;
   // Parent class
   friend class BaseMapNode;
 
@@ -1762,12 +1825,6 @@ class MapNode : public BaseMapNode {
     ListNode n = Search(key);
     return n.IsNone() ? end() : iterator(n.i, this);
   }
-
-  /*!
-   * \brief Erase the entry associated with the key, do nothing if not exists
-   * \param key The indexing key
-   */
-  void erase(const key_type& key) { Erase(key); }
 
   /*!
    * \brief Erase the entry associated with the iterator
@@ -1945,29 +2002,8 @@ class MapNode : public BaseMapNode {
     }
   }
 
-  /*!
-   * \brief Remove an entry associated with the given key
-   * \param key The node to be removed
-   */
-  void Erase(const key_type& key) {
-    ListNode n = Search(key);
-    if (!n.IsNone()) {
-      Erase(n);
-    }
-  }
-
-  /*! \brief Clear the container to empty, release all memory acquired */
+  /*! \brief Clear the container to empty, release all entries and memory acquired */
   void Reset() {
-    this->ReleaseItems();
-    delete[] data_;
-    data_ = nullptr;
-    slots_ = 0;
-    size_ = 0;
-    fib_shift_ = 63;
-  }
-
-  /*! \brief Clear the container to empty, release all entries */
-  void ReleaseItems() {
     uint64_t n_blocks = CalcNumBlocks(this->slots_);
     MapNode* m = this;
     for (uint64_t bi = 0; bi < n_blocks; ++bi) {
@@ -1981,7 +2017,11 @@ class MapNode : public BaseMapNode {
         }
       }
     }
-    this->size_ = 0;
+    delete[] data_;
+    data_ = nullptr;
+    slots_ = 0;
+    size_ = 0;
+    fib_shift_ = 63;
   }
 
   /*!
@@ -2027,7 +2067,7 @@ class MapNode : public BaseMapNode {
    */
   static ObjectPtr<MapNode> CopyFrom(MapNode* m) {
     if (m == nullptr) {
-      return MapNode::Empty();
+      return Empty();
     }
     ObjectPtr<MapNode> p = make_object<MapNode>();
     uint64_t n_blocks = CalcNumBlocks(m->slots_);
@@ -2058,7 +2098,7 @@ class MapNode : public BaseMapNode {
    */
   static void Insert(const KVType& kv, ObjectPtr<Object>* map) {
     MapNode* m = static_cast<MapNode*>(map->get());
-    MapNode::ListNode n;
+    ListNode n;
     if (m->TryInsert(kv.first, &n)) {
       n.Val() = kv.second;
       return;
@@ -2276,6 +2316,69 @@ inline BaseMapNode::iterator& BaseMapNode::iterator::operator--() {
   return *this;
 }
 
+inline size_t BaseMapNode::count(const key_type& key) const {
+  const MapNode* p = static_cast<const MapNode*>(this);
+  return p->count(key);
+}
+
+inline const BaseMapNode::mapped_type& BaseMapNode::at(const BaseMapNode::key_type& key) const {
+  const MapNode* p = static_cast<const MapNode*>(this);
+  return p->at(key);
+}
+
+inline BaseMapNode::mapped_type& BaseMapNode::at(const BaseMapNode::key_type& key) {
+  MapNode* p = static_cast<MapNode*>(this);
+  return p->at(key);
+}
+
+inline BaseMapNode::iterator BaseMapNode::begin() const {
+  const MapNode* p = static_cast<const MapNode*>(this);
+  return p->begin();
+}
+
+inline BaseMapNode::iterator BaseMapNode::end() const {
+  const MapNode* p = static_cast<const MapNode*>(this);
+  return p->end();
+}
+
+inline BaseMapNode::iterator BaseMapNode::find(const BaseMapNode::key_type& key) const {
+  const MapNode* p = static_cast<const MapNode*>(this);
+  return p->find(key);
+}
+
+inline void BaseMapNode::erase(const BaseMapNode::iterator& position) {
+  MapNode* p = static_cast<MapNode*>(this);
+  return p->erase(position);
+}
+
+inline ObjectPtr<BaseMapNode> BaseMapNode::Empty() { return MapNode::Empty(); }
+
+template <typename IterType>
+inline ObjectPtr<Object> BaseMapNode::CreateFromRange(IterType first, IterType last) {
+  int64_t cap = std::distance(first, last);
+  if (cap <= 0) {
+    return MapNode::Empty();
+  }
+  uint32_t fib_shift = 64;
+  uint64_t n_slots = 1;
+  for (; cap; fib_shift -= 1, n_slots <<= 1, cap >>= 1) {
+  }
+  ObjectPtr<Object> n = MapNode::Empty(fib_shift - 1, n_slots << 1);
+  for (; first != last; ++first) {
+    KVType kv(*first);
+    MapNode::Insert(kv, &n);
+  }
+  return n;
+}
+
+inline void BaseMapNode::Insert(const KVType& kv, ObjectPtr<Object>* map) {
+  MapNode::Insert(kv, map);
+}
+
+inline ObjectPtr<BaseMapNode> BaseMapNode::CopyFrom(BaseMapNode* m) {
+  return MapNode::CopyFrom(static_cast<MapNode*>(m));
+}
+
 /*!
  * \brief Map container of NodeRef->NodeRef in DSL graph.
  *  Map implements copy on write semantics, which means map is mutable
@@ -2294,7 +2397,7 @@ class Map : public ObjectRef {
   /*!
    * \brief default constructor
    */
-  Map() { data_ = MapNode::Empty(); }
+  Map() { data_ = BaseMapNode::Empty(); }
   /*!
    * \brief move constructor
    * \param other source
@@ -2336,20 +2439,22 @@ class Map : public ObjectRef {
    */
   template <typename IterType>
   Map(IterType begin, IterType end) {
-    Assign(begin, end);
+    data_ = BaseMapNode::CreateFromRange(begin, end);
   }
   /*!
    * \brief constructor from initializer list
    * \param init The initalizer list
    */
-  Map(std::initializer_list<std::pair<K, V>> init) { Assign(init.begin(), init.end()); }
+  Map(std::initializer_list<std::pair<K, V>> init) {
+    data_ = BaseMapNode::CreateFromRange(init.begin(), init.end());
+  }
   /*!
    * \brief constructor from unordered_map
    * \param init The unordered_map
    */
   template <typename Hash, typename Equal>
   Map(const std::unordered_map<K, V, Hash, Equal>& init) {  // NOLINT(*)
-    Assign(init.begin(), init.end());
+    data_ = BaseMapNode::CreateFromRange(init.begin(), init.end());
   }
   /*!
    * \brief Create a runtime::Map and expose it as ObjectPtr
@@ -2377,12 +2482,12 @@ class Map : public ObjectRef {
   const V operator[](const K& key) const { return this->at(key); }
   /*! \return The size of the array */
   size_t size() const {
-    MapNode* n = GetMapNode();
+    BaseMapNode* n = GetMapNode();
     return n == nullptr ? 0 : n->size();
   }
   /*! \return The number of elements of the key */
   size_t count(const K& key) const {
-    MapNode* n = GetMapNode();
+    BaseMapNode* n = GetMapNode();
     return n == nullptr ? 0 : GetMapNode()->count(key);
   }
   /*! \return whether array is empty */
@@ -2394,7 +2499,7 @@ class Map : public ObjectRef {
    */
   void Set(const K& key, const V& value) {
     CopyOnWrite();
-    MapNode::Insert(MapNode::KVType(key, value), &data_);
+    BaseMapNode::Insert(BaseMapNode::KVType(key, value), &data_);
   }
   /*! \return begin iterator */
   iterator begin() const { return iterator(GetMapNode()->begin()); }
@@ -2410,9 +2515,11 @@ class Map : public ObjectRef {
    *
    * \return Handle to the internal node container(which ganrantees to be unique)
    */
-  MapNode* CopyOnWrite() {
-    if (data_.get() == nullptr || !data_.unique()) {
-      data_ = MapNode::CopyFrom(GetMapNode());
+  BaseMapNode* CopyOnWrite() {
+    if (data_.get() == nullptr) {
+      data_ = BaseMapNode::Empty();
+    } else if (!data_.unique()) {
+      data_ = BaseMapNode::CopyFrom(GetMapNode());
     }
     return GetMapNode();
   }
@@ -2475,32 +2582,8 @@ class Map : public ObjectRef {
   };
 
  private:
-  /*!
-   * \brief Reset the map using contents from the given iterators.
-   * \param first Begin of iterator
-   * \param last End of iterator
-   * \tparam IterType The type of iterator
-   */
-  template <typename IterType>
-  void Assign(IterType first, IterType last) {
-    int64_t cap = std::distance(first, last);
-    if (cap <= 0) {
-      data_ = MapNode::Empty();
-      return;
-    }
-    uint32_t fib_shift = 64;
-    uint64_t n_slots = 1;
-    for (; cap; fib_shift -= 1, n_slots <<= 1, cap >>= 1) {
-    }
-    ObjectPtr<Object> n = MapNode::Empty(fib_shift - 1, n_slots << 1);
-    for (; first != last; ++first) {
-      MapNode::KVType kv(*first);
-      MapNode::Insert(kv, &n);
-    }
-    data_ = std::move(n);
-  }
   /*! \brief Return data_ as type of pointer of MapNode */
-  MapNode* GetMapNode() const { return static_cast<MapNode*>(data_.get()); }
+  BaseMapNode* GetMapNode() const { return static_cast<BaseMapNode*>(data_.get()); }
 };
 
 }  // namespace runtime
