@@ -298,8 +298,7 @@ struct MapNodeTrait {
 TVM_REGISTER_OBJECT_TYPE(MapNode);
 TVM_REGISTER_REFLECTION_VTABLE(MapNode, MapNodeTrait)
     .set_creator([](const std::string&) -> ObjectPtr<Object> {
-      // TODO(@junrushao1994)
-      return ::tvm::runtime::make_object<runtime::DenseMapNode>();
+      return ::tvm::runtime::make_object<MapNode>();
     });
 
 TVM_REGISTER_GLOBAL("node.Map").set_body([](TVMArgs args, TVMRetValue* ret) {
@@ -359,4 +358,6 @@ TVM_REGISTER_GLOBAL("node.MapItems").set_body([](TVMArgs args, TVMRetValue* ret)
   }
   *ret = std::move(rkvs);
 });
+
+TVM_DLL constexpr uint64_t DenseMapNode::kJumpDists[];
 }  // namespace tvm

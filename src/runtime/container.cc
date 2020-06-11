@@ -82,7 +82,5 @@ TVM_REGISTER_OBJECT_TYPE(ADTObj);
 TVM_REGISTER_OBJECT_TYPE(StringObj);
 TVM_REGISTER_OBJECT_TYPE(ClosureObj);
 
-TVM_DLL constexpr uint64_t DenseMapNode::kJumpDists[];
-
 }  // namespace runtime
 }  // namespace tvm
