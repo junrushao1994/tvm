@@ -29,6 +29,7 @@
 #include <tvm/runtime/packed_func.h>
 
 #include <string>
+#include <utility>
 
 namespace tvm {
 
@@ -216,28 +217,12 @@ class DenseMapNode : public MapNode {
    */
   ~DenseMapNode() { this->Reset(); }
 
-  /*!
-   * \brief Count the number of times a key exists in the DenseMapNode
-   * \param key The indexing key
-   * \return The result, 0 or 1
-   */
   size_t count(const key_type& key) const { return !Search(key).IsNone(); }
 
-  /*!
-   * \brief Index value associated with a key, throw exception if the key does not exist
-   * \param key The indexing key
-   * \return The const reference to the value
-   */
   const mapped_type& at(const key_type& key) const { return At(key); }
 
-  /*!
-   * \brief Index value associated with a key, throw exception if the key does not exist
-   * \param key The indexing key
-   * \return The mutable reference to the value
-   */
   mapped_type& at(const key_type& key) { return At(key); }
 
-  /*! \return begin iterator */
   iterator begin() const {
     if (slots_ == 0) {
       return iterator(0, this);
@@ -250,23 +235,13 @@ class DenseMapNode : public MapNode {
     return iterator(slots_ + 1, this);
   }
 
-  /*! \return end iterator */
   iterator end() const { return slots_ == 0 ? iterator(0, this) : iterator(slots_ + 1, this); }
 
-  /*!
-   * \brief Index value associated with a key
-   * \param key The indexing key
-   * \return The iterator of the entry associated with the key, end iterator if not exists
-   */
   iterator find(const key_type& key) const {
     ListNode n = Search(key);
     return n.IsNone() ? end() : iterator(n.i, this);
   }
 
-  /*!
-   * \brief Erase the entry associated with the iterator
-   * \param position The iterator
-   */
   void erase(const iterator& position) {
     uint64_t i = position.i;
     if (position.self != nullptr && i <= this->slots_) {
@@ -1038,7 +1013,7 @@ namespace tvm {
 namespace runtime {
 // Additional overloads for PackedFunc checking.
 template <typename T>
-struct ObjectTypeChecker<Array<T> > {
+struct ObjectTypeChecker<Array<T>> {
   static bool Check(const Object* ptr) {
     if (ptr == nullptr) return true;
     if (!ptr->IsInstance<ArrayNode>()) return false;
@@ -1054,7 +1029,7 @@ struct ObjectTypeChecker<Array<T> > {
 };
 
 template <typename K, typename V>
-struct ObjectTypeChecker<Map<K, V> > {
+struct ObjectTypeChecker<Map<K, V>> {
   static bool Check(const Object* ptr) {
     if (ptr == nullptr) return true;
     if (!ptr->IsInstance<MapNode>()) return false;
