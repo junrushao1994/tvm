@@ -1605,7 +1605,7 @@ struct PackedFuncValueConverter<Optional<T>> {
 };
 
 /*! \brief map node content */
-class BaseMapNode : public Object {
+class MapNode : public Object {
  public:
   /*! \brief Type of the keys in the hash map */
   using key_type = ObjectRef;
@@ -1621,15 +1621,15 @@ class BaseMapNode : public Object {
 
   static constexpr const uint32_t _type_index = TypeIndex::kRuntimeMap;
   static constexpr const char* _type_key = "Map";
-  TVM_DECLARE_FINAL_OBJECT_INFO(BaseMapNode, Object);
+  TVM_DECLARE_FINAL_OBJECT_INFO(MapNode, Object);
 
   /*!
-   * \brief Number of elements in the MapNode
+   * \brief Number of elements in the DenseMapNode
    * \return The result
    */
   size_t size() const { return size_; }
   /*!
-   * \brief Count the number of times a key exists in the MapNode
+   * \brief Count the number of times a key exists in the DenseMapNode
    * \param key The indexing key
    * \return The result, 0 or 1
    */
@@ -1703,13 +1703,13 @@ class BaseMapNode : public Object {
 
    protected:
     /*! \brief Construct by value */
-    iterator(uint64_t i, const BaseMapNode* self) : i(i), self(self) {}
+    iterator(uint64_t i, const MapNode* self) : i(i), self(self) {}
     /*! \brief The position on the array */
     uint64_t i;
     /*! \brief The container it points to */
-    const BaseMapNode* self;
+    const MapNode* self;
 
-    friend class MapNode;
+    friend class DenseMapNode;
   };
 
  protected:
@@ -1717,7 +1717,7 @@ class BaseMapNode : public Object {
    * \brief Create an empty container
    * \return The object created
    */
-  static ObjectPtr<BaseMapNode> Empty();
+  static ObjectPtr<MapNode> Empty();
   /*!
    * \brief Create the map using contents from the given iterators.
    * \param first Begin of iterator
@@ -1734,11 +1734,11 @@ class BaseMapNode : public Object {
    */
   static void Insert(const KVType& kv, ObjectPtr<Object>* map);
   /*!
-   * \brief Create an empty container with elements copying from another MapNode
+   * \brief Create an empty container with elements copying from another DenseMapNode
    * \param m The source container
    * \return The object created
    */
-  static ObjectPtr<BaseMapNode> CopyFrom(BaseMapNode* m);
+  static ObjectPtr<MapNode> CopyFrom(MapNode* m);
   /*! \brief number of slots minus 1 */
   uint64_t slots_;
   /*! \brief number of entries in the container */
@@ -1749,10 +1749,10 @@ class BaseMapNode : public Object {
 };
 
 template <>
-ObjectPtr<BaseMapNode> make_object<>() = delete;
+ObjectPtr<MapNode> make_object<>() = delete;
 
 /*! \brief map node content */
-class MapNode : public BaseMapNode {
+class DenseMapNode : public MapNode {
  private:
   /*! \brief The number of elements in a memory block */
   static constexpr int kBlockCap = 16;
@@ -1769,18 +1769,18 @@ class MapNode : public BaseMapNode {
   struct ListNode;
 
   // Parent class
-  friend class BaseMapNode;
+  friend class MapNode;
 
  public:
-  using BaseMapNode::iterator;
+  using MapNode::iterator;
 
   /*!
-   * \brief Destroy the MapNode
+   * \brief Destroy the DenseMapNode
    */
-  ~MapNode() { this->Reset(); }
+  ~DenseMapNode() { this->Reset(); }
 
   /*!
-   * \brief Count the number of times a key exists in the MapNode
+   * \brief Count the number of times a key exists in the DenseMapNode
    * \param key The indexing key
    * \return The result, 0 or 1
    */
@@ -2005,7 +2005,7 @@ class MapNode : public BaseMapNode {
   /*! \brief Clear the container to empty, release all entries and memory acquired */
   void Reset() {
     uint64_t n_blocks = CalcNumBlocks(this->slots_);
-    MapNode* m = this;
+    DenseMapNode* m = this;
     for (uint64_t bi = 0; bi < n_blocks; ++bi) {
       uint8_t* m_m = m->data_[bi].b;
       KVType* m_d = reinterpret_cast<KVType*>(m->data_[bi].b + kBlockCap);
@@ -2028,8 +2028,8 @@ class MapNode : public BaseMapNode {
    * \brief Create an empty container
    * \return The object created
    */
-  static ObjectPtr<MapNode> Empty() {
-    ObjectPtr<MapNode> p = make_object<MapNode>();
+  static ObjectPtr<DenseMapNode> Empty() {
+    ObjectPtr<DenseMapNode> p = make_object<DenseMapNode>();
     p->data_ = nullptr;
     p->slots_ = 0;
     p->size_ = 0;
@@ -2043,12 +2043,12 @@ class MapNode : public BaseMapNode {
    * \param n_slots Number of slots required, should be power-of-two
    * \return The object created
    */
-  static ObjectPtr<MapNode> Empty(uint32_t fib_shift, uint64_t n_slots) {
+  static ObjectPtr<DenseMapNode> Empty(uint32_t fib_shift, uint64_t n_slots) {
     CHECK((n_slots & -(n_slots)) == n_slots);
     if (n_slots == 0) {
       return Empty();
     }
-    ObjectPtr<MapNode> p = make_object<MapNode>();
+    ObjectPtr<DenseMapNode> p = make_object<DenseMapNode>();
     uint64_t n_blocks = CalcNumBlocks(n_slots - 1);
     Block* block = p->data_ = new Block[n_blocks];
     p->slots_ = n_slots - 1;
@@ -2061,15 +2061,15 @@ class MapNode : public BaseMapNode {
   }
 
   /*!
-   * \brief Create an empty container with elements copying from another MapNode
+   * \brief Create an empty container with elements copying from another DenseMapNode
    * \param m The source container
    * \return The object created
    */
-  static ObjectPtr<MapNode> CopyFrom(MapNode* m) {
+  static ObjectPtr<DenseMapNode> CopyFrom(DenseMapNode* m) {
     if (m == nullptr) {
       return Empty();
     }
-    ObjectPtr<MapNode> p = make_object<MapNode>();
+    ObjectPtr<DenseMapNode> p = make_object<DenseMapNode>();
     uint64_t n_blocks = CalcNumBlocks(m->slots_);
     p->data_ = new Block[n_blocks];
     p->slots_ = m->slots_;
@@ -2097,7 +2097,7 @@ class MapNode : public BaseMapNode {
    * \param map The pointer to the map, can be changed if re-hashing happens
    */
   static void Insert(const KVType& kv, ObjectPtr<Object>* map) {
-    MapNode* m = static_cast<MapNode*>(map->get());
+    DenseMapNode* m = static_cast<DenseMapNode*>(map->get());
     ListNode n;
     if (m->TryInsert(kv.first, &n)) {
       n.Val() = kv.second;
@@ -2120,7 +2120,7 @@ class MapNode : public BaseMapNode {
       }
     }
     delete[] m->data_;
-    CHECK((static_cast<MapNode*>(p.get()))->size_ == m->size_ + 1);
+    CHECK((static_cast<DenseMapNode*>(p.get()))->size_ == m->size_ + 1);
     m->data_ = nullptr;
     m->slots_ = 0;
     m->size_ = 0;
@@ -2165,7 +2165,7 @@ class MapNode : public BaseMapNode {
     /*! \brief Construct None */
     ListNode() : i(0), cur(nullptr) {}
     /*! \brief Construct from position */
-    ListNode(uint64_t i, const MapNode* self) : i(i), cur(self->data_ + (i / kBlockCap)) {}
+    ListNode(uint64_t i, const DenseMapNode* self) : i(i), cur(self->data_ + (i / kBlockCap)) {}
     /*! \brief Metadata on the entry */
     uint8_t& Meta() const { return *(cur->b + i % kBlockCap); }
     /*! \brief Data on the entry */
@@ -2203,7 +2203,7 @@ class MapNode : public BaseMapNode {
     /*! \brief If the entry has next entry on the linked list */
     bool HasNext() const { return kJumpDists[Meta() & 0b01111111] != 0; }
     /*! \brief Move the entry to the next entry on the linked list */
-    bool MoveToNext(const MapNode* self, uint8_t meta) {
+    bool MoveToNext(const DenseMapNode* self, uint8_t meta) {
       uint64_t d = kJumpDists[meta & 0b01111111];
       if (d == 0) {
         i = 0;
@@ -2215,9 +2215,9 @@ class MapNode : public BaseMapNode {
       return true;
     }
     /*! \brief Move the entry to the next entry on the linked list */
-    bool MoveToNext(const MapNode* self) { return MoveToNext(self, Meta()); }
+    bool MoveToNext(const DenseMapNode* self) { return MoveToNext(self, Meta()); }
     /*! \brief Get the previous entry on the linked list */
-    ListNode GetPrev(const MapNode* self) const {
+    ListNode GetPrev(const DenseMapNode* self) const {
       // start from the head of the linked list, which must exist
       ListNode n = self->FromHash(ObjectHash()(Key()));
       // `m` is always the previous item of `n`
@@ -2227,7 +2227,7 @@ class MapNode : public BaseMapNode {
       return m;
     }
     /*! \brief Get the next empty jump */
-    bool GetNextEmpty(const MapNode* self, uint8_t* jump, ListNode* result) const {
+    bool GetNextEmpty(const DenseMapNode* self, uint8_t* jump, ListNode* result) const {
       for (uint8_t idx = 1; idx < kNumJumpDists; ++idx) {
         ListNode n((i + kJumpDists[idx]) & (self->slots_), self);
         if (n.IsEmpty()) {
@@ -2299,84 +2299,84 @@ class MapNode : public BaseMapNode {
   /* clang-format on */
 };
 
-inline BaseMapNode::iterator::pointer BaseMapNode::iterator::operator->() const {
-  const MapNode* p = static_cast<const MapNode*>(self);
+inline MapNode::iterator::pointer MapNode::iterator::operator->() const {
+  const DenseMapNode* p = static_cast<const DenseMapNode*>(self);
   return p->DeRefItr(i);
 }
 
-inline BaseMapNode::iterator& BaseMapNode::iterator::operator++() {
-  const MapNode* p = static_cast<const MapNode*>(self);
+inline MapNode::iterator& MapNode::iterator::operator++() {
+  const DenseMapNode* p = static_cast<const DenseMapNode*>(self);
   i = p->IncItr(i);
   return *this;
 }
 
-inline BaseMapNode::iterator& BaseMapNode::iterator::operator--() {
-  const MapNode* p = static_cast<const MapNode*>(self);
+inline MapNode::iterator& MapNode::iterator::operator--() {
+  const DenseMapNode* p = static_cast<const DenseMapNode*>(self);
   i = p->DecItr(i);
   return *this;
 }
 
-inline size_t BaseMapNode::count(const key_type& key) const {
-  const MapNode* p = static_cast<const MapNode*>(this);
+inline size_t MapNode::count(const key_type& key) const {
+  const DenseMapNode* p = static_cast<const DenseMapNode*>(this);
   return p->count(key);
 }
 
-inline const BaseMapNode::mapped_type& BaseMapNode::at(const BaseMapNode::key_type& key) const {
-  const MapNode* p = static_cast<const MapNode*>(this);
+inline const MapNode::mapped_type& MapNode::at(const MapNode::key_type& key) const {
+  const DenseMapNode* p = static_cast<const DenseMapNode*>(this);
   return p->at(key);
 }
 
-inline BaseMapNode::mapped_type& BaseMapNode::at(const BaseMapNode::key_type& key) {
-  MapNode* p = static_cast<MapNode*>(this);
+inline MapNode::mapped_type& MapNode::at(const MapNode::key_type& key) {
+  DenseMapNode* p = static_cast<DenseMapNode*>(this);
   return p->at(key);
 }
 
-inline BaseMapNode::iterator BaseMapNode::begin() const {
-  const MapNode* p = static_cast<const MapNode*>(this);
+inline MapNode::iterator MapNode::begin() const {
+  const DenseMapNode* p = static_cast<const DenseMapNode*>(this);
   return p->begin();
 }
 
-inline BaseMapNode::iterator BaseMapNode::end() const {
-  const MapNode* p = static_cast<const MapNode*>(this);
+inline MapNode::iterator MapNode::end() const {
+  const DenseMapNode* p = static_cast<const DenseMapNode*>(this);
   return p->end();
 }
 
-inline BaseMapNode::iterator BaseMapNode::find(const BaseMapNode::key_type& key) const {
-  const MapNode* p = static_cast<const MapNode*>(this);
+inline MapNode::iterator MapNode::find(const MapNode::key_type& key) const {
+  const DenseMapNode* p = static_cast<const DenseMapNode*>(this);
   return p->find(key);
 }
 
-inline void BaseMapNode::erase(const BaseMapNode::iterator& position) {
-  MapNode* p = static_cast<MapNode*>(this);
+inline void MapNode::erase(const MapNode::iterator& position) {
+  DenseMapNode* p = static_cast<DenseMapNode*>(this);
   return p->erase(position);
 }
 
-inline ObjectPtr<BaseMapNode> BaseMapNode::Empty() { return MapNode::Empty(); }
+inline ObjectPtr<MapNode> MapNode::Empty() { return DenseMapNode::Empty(); }
 
 template <typename IterType>
-inline ObjectPtr<Object> BaseMapNode::CreateFromRange(IterType first, IterType last) {
+inline ObjectPtr<Object> MapNode::CreateFromRange(IterType first, IterType last) {
   int64_t cap = std::distance(first, last);
   if (cap <= 0) {
-    return MapNode::Empty();
+    return DenseMapNode::Empty();
   }
   uint32_t fib_shift = 64;
   uint64_t n_slots = 1;
   for (; cap; fib_shift -= 1, n_slots <<= 1, cap >>= 1) {
   }
-  ObjectPtr<Object> n = MapNode::Empty(fib_shift - 1, n_slots << 1);
+  ObjectPtr<Object> n = DenseMapNode::Empty(fib_shift - 1, n_slots << 1);
   for (; first != last; ++first) {
     KVType kv(*first);
-    MapNode::Insert(kv, &n);
+    DenseMapNode::Insert(kv, &n);
   }
   return n;
 }
 
-inline void BaseMapNode::Insert(const KVType& kv, ObjectPtr<Object>* map) {
-  MapNode::Insert(kv, map);
+inline void MapNode::Insert(const KVType& kv, ObjectPtr<Object>* map) {
+  DenseMapNode::Insert(kv, map);
 }
 
-inline ObjectPtr<BaseMapNode> BaseMapNode::CopyFrom(BaseMapNode* m) {
-  return MapNode::CopyFrom(static_cast<MapNode*>(m));
+inline ObjectPtr<MapNode> MapNode::CopyFrom(MapNode* m) {
+  return DenseMapNode::CopyFrom(static_cast<DenseMapNode*>(m));
 }
 
 /*!
@@ -2397,7 +2397,7 @@ class Map : public ObjectRef {
   /*!
    * \brief default constructor
    */
-  Map() { data_ = BaseMapNode::Empty(); }
+  Map() { data_ = MapNode::Empty(); }
   /*!
    * \brief move constructor
    * \param other source
@@ -2439,14 +2439,14 @@ class Map : public ObjectRef {
    */
   template <typename IterType>
   Map(IterType begin, IterType end) {
-    data_ = BaseMapNode::CreateFromRange(begin, end);
+    data_ = MapNode::CreateFromRange(begin, end);
   }
   /*!
    * \brief constructor from initializer list
    * \param init The initalizer list
    */
   Map(std::initializer_list<std::pair<K, V>> init) {
-    data_ = BaseMapNode::CreateFromRange(init.begin(), init.end());
+    data_ = MapNode::CreateFromRange(init.begin(), init.end());
   }
   /*!
    * \brief constructor from unordered_map
@@ -2454,7 +2454,7 @@ class Map : public ObjectRef {
    */
   template <typename Hash, typename Equal>
   Map(const std::unordered_map<K, V, Hash, Equal>& init) {  // NOLINT(*)
-    data_ = BaseMapNode::CreateFromRange(init.begin(), init.end());
+    data_ = MapNode::CreateFromRange(init.begin(), init.end());
   }
   /*!
    * \brief Create a runtime::Map and expose it as ObjectPtr
@@ -2473,7 +2473,7 @@ class Map : public ObjectRef {
    * \param key The key
    * \return the corresonding element.
    */
-  const V at(const K& key) const { return DowncastNoCheck<V>(GetMapNode()->at(key)); }
+  const V at(const K& key) const { return DowncastNoCheck<V>(GetDenseMapNode()->at(key)); }
   /*!
    * \brief Read element from map.
    * \param key The key
@@ -2482,13 +2482,13 @@ class Map : public ObjectRef {
   const V operator[](const K& key) const { return this->at(key); }
   /*! \return The size of the array */
   size_t size() const {
-    BaseMapNode* n = GetMapNode();
+    MapNode* n = GetDenseMapNode();
     return n == nullptr ? 0 : n->size();
   }
   /*! \return The number of elements of the key */
   size_t count(const K& key) const {
-    BaseMapNode* n = GetMapNode();
-    return n == nullptr ? 0 : GetMapNode()->count(key);
+    MapNode* n = GetDenseMapNode();
+    return n == nullptr ? 0 : GetDenseMapNode()->count(key);
   }
   /*! \return whether array is empty */
   bool empty() const { return size() == 0; }
@@ -2499,14 +2499,14 @@ class Map : public ObjectRef {
    */
   void Set(const K& key, const V& value) {
     CopyOnWrite();
-    BaseMapNode::Insert(BaseMapNode::KVType(key, value), &data_);
+    MapNode::Insert(MapNode::KVType(key, value), &data_);
   }
   /*! \return begin iterator */
-  iterator begin() const { return iterator(GetMapNode()->begin()); }
+  iterator begin() const { return iterator(GetDenseMapNode()->begin()); }
   /*! \return end iterator */
-  iterator end() const { return iterator(GetMapNode()->end()); }
+  iterator end() const { return iterator(GetDenseMapNode()->end()); }
   /*! \return find the key and returns the associated iterator */
-  iterator find(const K& key) const { return iterator(GetMapNode()->find(key)); }
+  iterator find(const K& key) const { return iterator(GetDenseMapNode()->find(key)); }
   /*!
    * \brief copy on write semantics
    *  Do nothing if current handle is the unique copy of the array.
@@ -2515,16 +2515,16 @@ class Map : public ObjectRef {
    *
    * \return Handle to the internal node container(which ganrantees to be unique)
    */
-  BaseMapNode* CopyOnWrite() {
+  MapNode* CopyOnWrite() {
     if (data_.get() == nullptr) {
-      data_ = BaseMapNode::Empty();
+      data_ = MapNode::Empty();
     } else if (!data_.unique()) {
-      data_ = BaseMapNode::CopyFrom(GetMapNode());
+      data_ = MapNode::CopyFrom(GetDenseMapNode());
     }
-    return GetMapNode();
+    return GetDenseMapNode();
   }
   /*! \brief specify container node */
-  using ContainerType = MapNode;
+  using ContainerType = DenseMapNode;
 
   /*! \brief Iterator of the hash map */
   class iterator {
@@ -2545,7 +2545,7 @@ class Map : public ObjectRef {
     pointer operator->() const = delete;
     /*! \brief De-reference iterators */
     reference operator*() const {
-      BaseMapNode::KVType& kv = *itr;
+      MapNode::KVType& kv = *itr;
       return std::make_pair(DowncastNoCheck<K>(kv.first), DowncastNoCheck<V>(kv.second));
     }
     /*! \brief Prefix self increment, e.g. ++iter */
@@ -2572,18 +2572,18 @@ class Map : public ObjectRef {
     }
 
    private:
-    iterator(const BaseMapNode::iterator& itr)  // NOLINT(*)
+    iterator(const MapNode::iterator& itr)  // NOLINT(*)
         : itr(itr) {}
 
     template <typename, typename, typename, typename>
     friend class Map;
 
-    BaseMapNode::iterator itr;
+    MapNode::iterator itr;
   };
 
  private:
-  /*! \brief Return data_ as type of pointer of MapNode */
-  BaseMapNode* GetMapNode() const { return static_cast<BaseMapNode*>(data_.get()); }
+  /*! \brief Return data_ as type of pointer of DenseMapNode */
+  MapNode* GetDenseMapNode() const { return static_cast<MapNode*>(data_.get()); }
 };
 
 }  // namespace runtime
