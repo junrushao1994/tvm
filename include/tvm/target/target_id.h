@@ -97,6 +97,7 @@ class TargetIdNode : public Object {
  */
 class TargetId : public ObjectRef {
  public:
+  TargetId() = default;
   /*! \brief Get the attribute map given the attribute name */
   template <typename ValueType>
   static inline TargetIdAttrMap<ValueType> GetAttrMap(const String& attr_name);

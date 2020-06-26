@@ -23,6 +23,13 @@ from . import _ffi_api
 
 
 @tvm._ffi.register_object
+class TargetId(Object):
+    """Id of a compilation target
+    """
+    pass
+
+
+@tvm._ffi.register_object
 class Target(Object):
     """Target device information, use through TVM API.
 

@@ -28,6 +28,14 @@
 
 namespace tvm {
 
+TVM_REGISTER_NODE_TYPE(TargetIdNode);
+
+TVM_STATIC_IR_FUNCTOR(ReprPrinter, vtable)
+    .set_dispatch<TargetIdNode>([](const ObjectRef& node, ReprPrinter* p) {
+      auto* op = static_cast<const TargetIdNode*>(node.get());
+      p->stream << op->name;
+    });
+
 using TargetIdRegistry = AttrRegistry<TargetIdRegEntry, TargetId>;
 
 TargetIdRegEntry& TargetIdRegEntry::RegisterOrGet(const String& target_id_name) {

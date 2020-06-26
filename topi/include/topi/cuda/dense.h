@@ -85,7 +85,7 @@ inline tvm::te::Tensor dense_cuda(const Target& target, const tvm::te::Tensor& d
  * \return A schedule for the given ops.
  */
 inline Schedule schedule_dense(const Target& target, const Array<Tensor>& outs) {
-  if (target->target_name == "cuda" && target->libs().count("cublas")) {
+  if (target->id->name == "cuda" && target->libs().count("cublas")) {
     return topi::generic::schedule_extern(target, outs);
   }
 

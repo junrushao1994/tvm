@@ -108,7 +108,7 @@ def context(target, extra_files=None):
             if opt.startswith("-device"):
                 device = _alias(opt[8:])
                 possible_names.append(device)
-        possible_names.append(tgt.target_name)
+        possible_names.append(tgt.id.name)
 
         all_packages = list(PACKAGE_VERSION.keys())
         for name in possible_names:

@@ -28,6 +28,7 @@
 #include <tvm/ir/transform.h>
 #include <tvm/node/container.h>
 #include <tvm/support/with.h>
+#include <tvm/target/target_id.h>
 
 #include <string>
 #include <unordered_set>
@@ -42,8 +43,8 @@ namespace tvm {
  */
 class TargetNode : public Object {
  public:
-  /*! \brief The name of the target device */
-  std::string target_name;
+  /*! \brief The id of the target device */
+  TargetId id;
   /*! \brief The name of the target device */
   std::string device_name;
   /*! \brief The type of the target device */
@@ -66,7 +67,7 @@ class TargetNode : public Object {
   TVM_DLL const std::string& str() const;
 
   void VisitAttrs(AttrVisitor* v) {
-    v->Visit("target_name", &target_name);
+    v->Visit("id", &id);
     v->Visit("device_name", &device_name);
     v->Visit("device_type", &device_type);
     v->Visit("max_num_threads", &max_num_threads);
@@ -106,6 +107,7 @@ class Target : public ObjectRef {
    * \param target_str the string to parse
    */
   TVM_DLL static Target Create(const std::string& target_str);
+  TVM_DLL static Target NewCreate(const std::string& target_str);
   /*!
    * \brief Get the current target context from thread local storage.
    * \param allow_not_defined If the context stack is empty and this is set to true, an
@@ -115,8 +117,6 @@ class Target : public ObjectRef {
    * allow_not_defined is true.
    */
   TVM_DLL static tvm::Target Current(bool allow_not_defined = true);
-
-  TVM_DLL static Target CreateFromPlainString(const std::string& target_str);
 
   const TargetNode* operator->() const { return static_cast<const TargetNode*>(get()); }
 
@@ -138,6 +138,8 @@ class Target : public ObjectRef {
    *  restoring the previous target as the current context.
    */
   TVM_DLL void ExitWithScope();
+
+  TVM_DLL static Target NewCreateTarget(const std::string& name, const std::vector<std::string>& options);
 };
 
 /*! \brief This namespace provides functions to construct Target instances */

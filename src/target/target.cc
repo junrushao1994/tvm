@@ -55,7 +55,7 @@ inline size_t CalcNumPrefixDashes(const std::string& s) {
   return i;
 }
 
-inline Target Target::CreateFromPlainString(const std::string& target_str) {
+inline Target Target::NewCreate(const std::string& target_str) {
   std::unordered_map<String, ObjectRef> attrs;
   std::vector<std::string> splits;
   {
@@ -149,23 +149,23 @@ TVM_STATIC_IR_FUNCTOR(ReprPrinter, vtable)
 
 /*!
  * \brief Construct a Target node from the given name and options.
- * \param target_name The major target name. Should be one of
+ * \param name The major target name. Should be one of
  * {"aocl", "aocl_sw_emu", "c", "cuda", "ext_dev", "hexagon", "hybrid", "llvm",
  *  "metal", "nvptx", "opencl", "rocm", "sdaccel", "stackvm", "vulkan"}
  * \param options Additional options appended to the target
  * \return The constructed Target
  */
-Target CreateTarget(const std::string& target_name, const std::vector<std::string>& options) {
+Target CreateTarget(const std::string& name, const std::vector<std::string>& options) {
   {
     std::ostringstream os;
-    os << target_name;
+    os << name;
     for (const auto &s : options) {
       os << ' ' << s;
     }
-    Target::CreateFromPlainString(os.str());
+    Target::NewCreate(os.str());
   }
   auto t = make_object<TargetNode>();
-  t->target_name = target_name;
+  t->id = TargetId::Get(name);
 
   std::string libs_flag = "-libs=";
   std::string device_flag = "-device=";
@@ -196,63 +196,63 @@ Target CreateTarget(const std::string& target_name, const std::vector<std::strin
   }
   t->device_type = kDLCPU;
   t->thread_warp_size = 1;
-  if (target_name == "c" && t->device_name == "micro_dev") {
+  if (name == "c" && t->device_name == "micro_dev") {
     t->device_type = kDLMicroDev;
-  } else if (target_name == "c" || target_name == "llvm") {
+  } else if (name == "c" || name == "llvm") {
     t->keys_array.push_back("cpu");
-  } else if (target_name == "cuda" || target_name == "nvptx") {
+  } else if (name == "cuda" || name == "nvptx") {
     t->device_type = kDLGPU;
     t->keys_array.push_back("cuda");
     t->keys_array.push_back("gpu");
     t->max_num_threads = 1024;
     t->thread_warp_size = 32;
-  } else if (target_name == "rocm" || target_name == "opencl") {
+  } else if (name == "rocm" || name == "opencl") {
     // For now assume rocm schedule for opencl
-    if (target_name == "opencl") {
+    if (name == "opencl") {
       t->device_type = kDLOpenCL;
     } else {  // rocm
       t->device_type = kDLROCM;
       t->thread_warp_size = 64;
     }
-    t->keys_array.push_back(target_name);
+    t->keys_array.push_back(name);
     t->keys_array.push_back("gpu");
     t->max_num_threads = 256;
     if (t->device_name == "intel_graphics") {
       t->thread_warp_size = 16;
     }
-  } else if (target_name == "metal" || target_name == "vulkan" || target_name == "webgpu") {
-    if (target_name == "metal") {
+  } else if (name == "metal" || name == "vulkan" || name == "webgpu") {
+    if (name == "metal") {
       t->device_type = kDLMetal;
-    } else if (target_name == "vulkan") {
+    } else if (name == "vulkan") {
       t->device_type = kDLVulkan;
     } else {
       t->device_type = kDLWebGPU;
     }
-    t->keys_array.push_back(target_name);
+    t->keys_array.push_back(name);
     t->keys_array.push_back("gpu");
     t->max_num_threads = 256;
-  } else if (target_name == "sdaccel") {
+  } else if (name == "sdaccel") {
     t->device_type = kDLOpenCL;
     t->keys_array.push_back("sdaccel");
     t->keys_array.push_back("hls");
-  } else if (target_name == "aocl" || target_name == "aocl_sw_emu") {
+  } else if (name == "aocl" || name == "aocl_sw_emu") {
     t->device_type = kDLAOCL;
     t->keys_array.push_back("aocl");
     t->keys_array.push_back("hls");
-  } else if (target_name == "stackvm") {
+  } else if (name == "stackvm") {
     t->device_type = kDLCPU;
-  } else if (target_name == "ext_dev") {
+  } else if (name == "ext_dev") {
     t->device_type = kDLExtDev;
-  } else if (target_name == "hybrid") {
+  } else if (name == "hybrid") {
     t->device_type = kDLCPU;
-  } else if (target_name == "hexagon") {
+  } else if (name == "hexagon") {
     t->keys_array.push_back("hexagon");
     t->device_type = kDLHexagon;
-  } else if (target_name == "webgpu") {
+  } else if (name == "webgpu") {
     t->keys_array.push_back("webgpu");
     t->device_type = kDLWebGPU;
   } else {
-    LOG(ERROR) << "Unknown target name " << target_name << "; falling back to stackvm";
+    LOG(ERROR) << "Unknown target name " << name << "; falling back to stackvm";
     return target::stackvm();
   }
 
@@ -260,14 +260,14 @@ Target CreateTarget(const std::string& target_name, const std::vector<std::strin
 }
 
 TVM_REGISTER_GLOBAL("target.TargetCreate").set_body([](TVMArgs args, TVMRetValue* ret) {
-  std::string target_name = args[0];
+  std::string name = args[0];
   std::vector<std::string> options;
   for (int i = 1; i < args.num_args; ++i) {
     std::string arg = args[i];
     options.push_back(arg);
   }
 
-  *ret = CreateTarget(target_name, options);
+  *ret = CreateTarget(name, options);
 });
 
 TVM_REGISTER_GLOBAL("target.TargetFromString").set_body([](TVMArgs args, TVMRetValue* ret) {
@@ -302,7 +302,7 @@ std::unordered_set<std::string> TargetNode::libs() const {
 const std::string& TargetNode::str() const {
   if (str_repr_.length() != 0) return str_repr_;
   std::ostringstream result;
-  result << target_name;
+  result << id->name;
   for (const auto& x : options()) {
     result << " " << x;
   }
@@ -316,8 +316,8 @@ bool StartsWith(const std::string& str, const std::string& pattern) {
 
 std::string GetDeviceName(const std::string& target_str) {
   std::istringstream ss(target_str);
-  std::string target_name;
-  ss >> target_name;
+  std::string name;
+  ss >> name;
 
   std::string item;
   while (ss >> item) {
@@ -335,9 +335,9 @@ Target Target::Create(const std::string& target_str) {
   }
 
   std::istringstream ss(target_str);
-  std::string target_name;
+  std::string name;
 
-  ss >> target_name;
+  ss >> name;
   auto device_name = GetDeviceName(target_str);
 
   std::vector<std::string> options;
@@ -346,7 +346,7 @@ Target Target::Create(const std::string& target_str) {
     options.push_back(item);
   }
 
-  return CreateTarget(target_name, options);
+  return CreateTarget(name, options);
 }
 
 /*! \brief Entry to hold the Target context stack. */
