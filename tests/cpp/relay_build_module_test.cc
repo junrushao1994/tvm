@@ -17,6 +17,7 @@
  * under the License.
  */
 
+#include <tvm/target/target.h>
 #include <gtest/gtest.h>
 #include <topi/broadcast.h>
 #include <topi/generic/injective.h>

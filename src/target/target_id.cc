@@ -45,14 +45,14 @@ const AttrRegistryMapContainerMap<TargetId>& TargetId::GetAttrMapContainer(
 
 const TargetId& TargetId::Get(const String& target_id_name) {
   const TargetIdRegEntry* reg = TargetIdRegistry::Global()->Get(target_id_name);
-  CHECK(reg != nullptr) << "TargetId " << target_id_name << " is not registered";
+  CHECK(reg != nullptr) << "ValueError: TargetId \"" << target_id_name << "\" is not registered";
   return reg->id_;
 }
 
 void VerifyTypeInfo(const ObjectRef& obj, const TargetIdNode::ValueTypeInfo& info) {
   CHECK(obj.defined()) << "Object is None";
   if (!runtime::ObjectInternal::DerivedFrom(obj.get(), info.type_index)) {
-    LOG(FATAL) << "AttributeError: expect type " << info.type_key << " but get "
+    LOG(FATAL) << "AttributeError: expect type \"" << info.type_key << "\" but get "
                << obj->GetTypeKey();
     throw;
   }
@@ -74,16 +74,16 @@ void VerifyTypeInfo(const ObjectRef& obj, const TargetIdNode::ValueTypeInfo& inf
       try {
         VerifyTypeInfo(kv.first, *info.key);
       } catch (const tvm::Error& e) {
-        LOG(FATAL) << "The key of map failed type checking, where key = " << kv.first
-                   << ", value = " << kv.second << ", and the error is:\n"
+        LOG(FATAL) << "The key of map failed type checking, where key = \"" << kv.first
+                   << "\", value = \"" << kv.second << "\", and the error is:\n"
                    << e.what();
         throw;
       }
       try {
         VerifyTypeInfo(kv.second, *info.val);
       } catch (const tvm::Error& e) {
-        LOG(FATAL) << "The value of map failed type checking, where key = " << kv.first
-                   << ", value = " << kv.second << ", and the error is:\n"
+        LOG(FATAL) << "The value of map failed type checking, where key = \"" << kv.first
+                   << "\", value = \"" << kv.second << "\", and the error is:\n"
                    << e.what();
         throw;
       }
@@ -98,16 +98,16 @@ void TargetIdNode::ValidateSchema(const Map<String, ObjectRef>& config) const {
     const ObjectRef& obj = kv.second;
     if (name == kTargetId) {
       CHECK(obj->IsInstance<StringObj>())
-          << "AttributeError: \"id\" is not a string, but its type is " << obj->GetTypeKey();
+          << "AttributeError: \"id\" is not a string, but its type is \"" << obj->GetTypeKey() << "\"";
       CHECK(Downcast<String>(obj) == this->name)
-          << "AttributeError: \"id\" = " << obj << " is inconsistent with TargetId " << this->name;
+          << "AttributeError: \"id\" = \"" << obj << "\" is inconsistent with TargetId \"" << this->name << "\"";
       continue;
     }
     auto it = key2vtype_.find(name);
     if (it == key2vtype_.end()) {
       std::ostringstream os;
-      os << "AttributeError: Invalid config option, cannot recognize \'" << name
-         << "\'. Candidates are:";
+      os << "AttributeError: Invalid config option, cannot recognize \"" << name
+         << "\". Candidates are:";
       for (const auto& kv : key2vtype_) {
         os << "\n  " << kv.first;
       }
@@ -118,8 +118,8 @@ void TargetIdNode::ValidateSchema(const Map<String, ObjectRef>& config) const {
     try {
       VerifyTypeInfo(obj, info);
     } catch (const tvm::Error& e) {
-      LOG(FATAL) << "AttributeError: Schema validation failed for TargetId " << this->name
-                 << ", details:\n"
+      LOG(FATAL) << "AttributeError: Schema validation failed for TargetId \"" << this->name
+                 << "\", details:\n"
                  << e.what() << "\n"
                  << "The config is:\n"
                  << config;
@@ -130,12 +130,12 @@ void TargetIdNode::ValidateSchema(const Map<String, ObjectRef>& config) const {
 
 inline String GetId(const Map<String, ObjectRef>& target, const char* name) {
   const String kTargetId = "id";
-  CHECK(target.count(kTargetId)) << "AttributeError: \"id\" does not exist in " << name << "\n"
+  CHECK(target.count(kTargetId)) << "AttributeError: \"id\" does not exist in \"" << name << "\"\n"
                                  << name << " = " << target;
   const ObjectRef& obj = target[kTargetId];
-  CHECK(obj->IsInstance<StringObj>()) << "AttributeError: \"id\" is not a string in " << name
-                                      << ", but its type is " << obj->GetTypeKey() << "\n"
-                                      << name << " = " << target;
+  CHECK(obj->IsInstance<StringObj>()) << "AttributeError: \"id\" is not a string in \"" << name
+                                      << "\", but its type is \"" << obj->GetTypeKey() << "\"\n"
+                                      << name << " = \"" << target << '"';
   return Downcast<String>(obj);
 }
 
@@ -156,9 +156,74 @@ void TargetValidateSchema(const Map<String, ObjectRef>& config) {
       TargetId::Get(target_host_id)->ValidateSchema(target_host);
     }
   } catch (const tvm::Error& e) {
-    LOG(INFO) << e.what();
-    throw e;
+    LOG(FATAL) << "AttributeError: schedule validation fails:\n"
+               << e.what() << "\nThe configuration is:\n"
+               << config;
   }
 }
+
+TVM_REGISTER_TARGET_ID("llvm")
+    .add_attr_option<Bool>("system-lib")
+    .add_attr_option<String>("mcpu")
+    .add_attr_option<String>("mattr")
+    .add_attr_option<String>("target")
+    .add_attr_option<String>("libs")
+    .add_attr_option<String>("model")
+    .add_attr_option<String>("device");
+
+TVM_REGISTER_TARGET_ID("cuda")
+    .add_attr_option<Bool>("system-lib")
+    .add_attr_option<String>("model")
+    .add_attr_option<String>("libs")
+    .add_attr_option<String>("device");
+
+TVM_REGISTER_TARGET_ID("rocm")
+    .add_attr_option<Bool>("system-lib")
+    .add_attr_option<String>("model")
+    .add_attr_option<String>("libs")
+    .add_attr_option<String>("device");
+
+TVM_REGISTER_TARGET_ID("opencl")
+    .add_attr_option<Bool>("system-lib")
+    .add_attr_option<String>("model")
+    .add_attr_option<String>("libs")
+    .add_attr_option<String>("device");
+
+TVM_REGISTER_TARGET_ID("metal")
+    .add_attr_option<Bool>("system-lib")
+    .add_attr_option<String>("model")
+    .add_attr_option<String>("libs")
+    .add_attr_option<String>("device");
+
+TVM_REGISTER_TARGET_ID("vulkan")
+    .add_attr_option<Bool>("system-lib")
+    .add_attr_option<String>("model")
+    .add_attr_option<String>("libs")
+    .add_attr_option<String>("device");
+
+TVM_REGISTER_TARGET_ID("stackvm")
+    .add_attr_option<Bool>("system-lib")
+    .add_attr_option<String>("model")
+    .add_attr_option<String>("libs")
+    .add_attr_option<String>("device");
+
+TVM_REGISTER_TARGET_ID("ext_dev")
+    .add_attr_option<Bool>("system-lib")
+    .add_attr_option<String>("model")
+    .add_attr_option<String>("libs")
+    .add_attr_option<String>("device");
+
+TVM_REGISTER_TARGET_ID("hexagon")
+    .add_attr_option<Bool>("system-lib")
+    .add_attr_option<String>("model")
+    .add_attr_option<String>("libs")
+    .add_attr_option<String>("device");
+
+TVM_REGISTER_TARGET_ID("c")
+    .add_attr_option<Bool>("system-lib")
+    .add_attr_option<String>("model")
+    .add_attr_option<String>("libs")
+    .add_attr_option<String>("device");
+
 
 }  // namespace tvm

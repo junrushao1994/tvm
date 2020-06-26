@@ -19,6 +19,7 @@
 
 #include <dmlc/logging.h>
 #include <gtest/gtest.h>
+#include <tvm/target/target.h>
 #include <topi/cuda/injective.h>
 #include <tvm/driver/driver_api.h>
 #include <tvm/runtime/registry.h>

@@ -24,6 +24,7 @@
 #include <tvm/node/repr_printer.h>
 #include <tvm/runtime/registry.h>
 #include <tvm/target/target.h>
+#include <tvm/target/target_id.h>
 #include <tvm/tir/expr.h>
 
 #include <algorithm>
@@ -34,6 +35,109 @@ namespace tvm {
 using runtime::PackedFunc;
 using runtime::TVMArgs;
 using runtime::TVMRetValue;
+
+inline int FindUnique(const std::string& str, const std::string& substr) {
+  size_t pos = str.find_first_of(substr);
+  if (pos == std::string::npos) {
+    return -1;
+  }
+  size_t next_pos = pos + substr.size();
+  CHECK(next_pos >= str.size() || str.find_first_of(substr, next_pos) == std::string::npos)
+      << "ValueError: At most one \"" << substr << "\" is allowed in "
+      << "the the given string \"" << str << "\"";
+  return pos;
+}
+
+inline size_t CalcNumPrefixDashes(const std::string& s) {
+  size_t i = 0;
+  for (; i < s.length() && s[i] == '-'; ++i)
+    ;
+  return i;
+}
+
+inline Target Target::CreateFromPlainString(const std::string& target_str) {
+  std::unordered_map<String, ObjectRef> attrs;
+  std::vector<std::string> splits;
+  {
+    std::istringstream is(target_str);
+    for (std::string s; is >> s; splits.push_back(s))
+      ;
+    CHECK(!splits.empty()) << "ValueError: Cannot parse empty string: \"" << target_str << "\"";
+  }
+  TargetId id = TargetId::Get(splits[0]);
+  const auto& key_vtype = id->key2vtype_;
+  for (size_t iter = 1, end = splits.size(); iter < end;) {
+    std::string s = splits[iter++];
+    // remove the prefix dashes
+    size_t n_dashes = CalcNumPrefixDashes(s);
+    CHECK(0 < n_dashes && n_dashes < s.size())
+        << "ValueError: Not an attribute key \"" << s << "\"";
+    s = s.substr(n_dashes);
+    // parse name-obj pair
+    std::string name;
+    std::string obj;
+    int pos;
+    if ((pos = FindUnique(s, "=")) != -1) {
+      // case 1. --key=value
+      name = s.substr(0, pos);
+      obj = s.substr(pos + 1);
+      CHECK(!name.empty()) << "ValueError: Empty attribute key in \"" << splits[iter - 1] << "\"";
+      CHECK(!obj.empty()) << "ValueError: Empty attribute in \"" << splits[iter - 1] << "\"";
+    } else if (iter < end && splits[iter][0] != '-') {
+      // case 2. --key value
+      name = s;
+      obj = splits[iter++];
+    } else {
+      // case 3. --boolean-key
+      name = s;
+      obj = "1";
+    }
+    // check if `name` is invalid
+    auto it = key_vtype.find(name);
+    if (it == key_vtype.end()) {
+      std::ostringstream os;
+      os << "AttributeError: Invalid config option, cannot recognize \'" << name
+         << "\'. Candidates are:";
+      for (const auto& kv : key_vtype) {
+        os << "\n  " << kv.first;
+      }
+      LOG(FATAL) << os.str();
+    }
+    // then `name` is valid, let's parse them
+    // only several types are supported when parsing raw string
+    const auto& info = it->second;
+    std::istringstream is(obj);
+    if (info.type_index == Integer::ContainerType::_GetOrAllocRuntimeTypeIndex()) {
+      int v;
+      is >> v;
+      attrs[name] = Integer(v);
+    } else if (info.type_index == String::ContainerType::_GetOrAllocRuntimeTypeIndex()) {
+      std::string v;
+      is >> v;
+      attrs[name] = String(v);
+    } else {
+      LOG(FATAL) << "TypeError: Parsing type \"" << info.type_key
+                 << "\" from raw string is not supported"
+                 << ", but get attribute key \"" << name << "\""
+                 << ", and attribute \"" << obj << "\"";
+    }
+    if (is.fail()) {
+      LOG(FATAL) << "ValueError: Cannot parse type \"" << info.type_key << "\""
+                 << ", where attribute key is \"" << name << "\""
+                 << ", and attribute is \"" << obj << "\"";
+    }
+  }
+  // set default attribute values if they do not exist
+  const auto& key_default = id->key2default_;
+  for (const auto &kv : key_default) {
+    if (!attrs.count(kv.first)) {
+      attrs[kv.first] = kv.second;
+    }
+  }
+  ObjectPtr<TargetNode> target = make_object<TargetNode>();
+  target->attrs = attrs;
+  return Target(target);
+}
 
 TVM_REGISTER_NODE_TYPE(TargetNode);
 
@@ -52,6 +156,14 @@ TVM_STATIC_IR_FUNCTOR(ReprPrinter, vtable)
  * \return The constructed Target
  */
 Target CreateTarget(const std::string& target_name, const std::vector<std::string>& options) {
+  {
+    std::ostringstream os;
+    os << target_name;
+    for (const auto &s : options) {
+      os << ' ' << s;
+    }
+    Target::CreateFromPlainString(os.str());
+  }
   auto t = make_object<TargetNode>();
   t->target_name = target_name;
 

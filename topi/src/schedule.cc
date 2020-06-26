@@ -23,6 +23,7 @@
  */
 #define TOPI_REDUCE_ATLEAST1D 0
 
+#include <tvm/target/target.h>
 #include <topi/cuda/dense.h>
 #include <topi/cuda/injective.h>
 #include <topi/cuda/normalization.h>

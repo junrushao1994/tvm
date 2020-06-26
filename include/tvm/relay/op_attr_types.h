@@ -27,7 +27,6 @@
 #include <tvm/relay/expr.h>
 #include <tvm/relay/type.h>
 #include <tvm/target/generic_func.h>
-#include <tvm/target/target.h>
 #include <tvm/te/schedule.h>
 #include <tvm/te/tensor.h>
 #include <tvm/tir/data_layout.h>
@@ -35,6 +34,9 @@
 #include <string>
 
 namespace tvm {
+
+class Target;
+
 namespace relay {
 
 using tir::BijectiveLayoutNode;

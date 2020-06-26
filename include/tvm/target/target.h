@@ -53,11 +53,14 @@ class TargetNode : public Object {
   /*! \brief The warp size that should be used by the LowerThreadAllreduce pass */
   int thread_warp_size = 1;
   /*! \brief Keys for this target */
-  Array<runtime::String> keys_array;
+  Array<String> keys_array;
   /*! \brief Options for this target */
-  Array<runtime::String> options_array;
+  Array<String> options_array;
   /*! \brief Collection of imported libs */
-  Array<runtime::String> libs_array;
+  Array<String> libs_array;
+
+  /*! \brief Collection of imported libs */
+  Map<String, ObjectRef> attrs;
 
   /*! \return the full device string to pass to codegen::Build */
   TVM_DLL const std::string& str() const;
@@ -112,6 +115,8 @@ class Target : public ObjectRef {
    * allow_not_defined is true.
    */
   TVM_DLL static tvm::Target Current(bool allow_not_defined = true);
+
+  TVM_DLL static Target CreateFromPlainString(const std::string& target_str);
 
   const TargetNode* operator->() const { return static_cast<const TargetNode*>(get()); }
 
