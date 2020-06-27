@@ -56,6 +56,8 @@ class TargetIdNode : public Object {
  public:
   /*! \brief Name of the target id */
   String name;
+  /*! \brief Device type of target id */
+  int device_type;
   /*! \brief Stores the required type_key and type_index of a specific attr of a target */
   struct ValueTypeInfo {
     String type_key;
@@ -156,6 +158,11 @@ class TargetIdRegEntry {
   template <typename ValueType>
   inline TargetIdRegEntry& set_attr(const String& attr_name, const ValueType& value,
                                     int plevel = 10);
+  /*!
+   * \brief Set DLPack's device_type the target
+   * \param device_type Device type
+   */
+  inline TargetIdRegEntry& set_device_type(int device_type);
   /*!
    * \brief Register a valid configuration option and its ValueType for validation
    * \param key The configuration key
@@ -299,6 +306,11 @@ inline TargetIdRegEntry& TargetIdRegEntry::set_attr(const String& attr_name, con
   runtime::TVMRetValue rv;
   rv = value;
   UpdateAttr(attr_name, rv, plevel);
+  return *this;
+}
+
+inline TargetIdRegEntry& TargetIdRegEntry::set_device_type(int device_type) {
+  id_->device_type = device_type;
   return *this;
 }
 

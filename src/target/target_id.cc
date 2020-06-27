@@ -177,31 +177,36 @@ TVM_REGISTER_TARGET_ID("llvm")
     .add_attr_option<String>("target")
     .add_attr_option<String>("libs")
     .add_attr_option<String>("model")
-    .add_attr_option<String>("device");
+    .add_attr_option<String>("device")
+    .set_device_type(kDLCPU);
 
 TVM_REGISTER_TARGET_ID("cuda")
     .add_attr_option<Bool>("system-lib")
     .add_attr_option<String>("model")
     .add_attr_option<String>("libs")
-    .add_attr_option<String>("device");
+    .add_attr_option<String>("device")
+    .set_device_type(kDLGPU);
 
 TVM_REGISTER_TARGET_ID("rocm")
     .add_attr_option<Bool>("system-lib")
     .add_attr_option<String>("model")
     .add_attr_option<String>("libs")
-    .add_attr_option<String>("device");
+    .add_attr_option<String>("device")
+    .set_device_type(kDLROCM);
 
 TVM_REGISTER_TARGET_ID("opencl")
     .add_attr_option<Bool>("system-lib")
     .add_attr_option<String>("model")
     .add_attr_option<String>("libs")
-    .add_attr_option<String>("device");
+    .add_attr_option<String>("device")
+    .set_device_type(kDLOpenCL);
 
 TVM_REGISTER_TARGET_ID("metal")
     .add_attr_option<Bool>("system-lib")
     .add_attr_option<String>("model")
     .add_attr_option<String>("libs")
-    .add_attr_option<String>("device");
+    .add_attr_option<String>("device")
+    .set_device_type(kDLMetal);
 
 TVM_REGISTER_TARGET_ID("vulkan")
     .add_attr_option<Bool>("system-lib")
@@ -213,7 +218,8 @@ TVM_REGISTER_TARGET_ID("stackvm")
     .add_attr_option<Bool>("system-lib")
     .add_attr_option<String>("model")
     .add_attr_option<String>("libs")
-    .add_attr_option<String>("device");
+    .add_attr_option<String>("device")
+    .set_device_type(kDLVulkan);
 
 TVM_REGISTER_TARGET_ID("ext_dev")
     .add_attr_option<Bool>("system-lib")
@@ -227,11 +233,52 @@ TVM_REGISTER_TARGET_ID("hexagon")
     .add_attr_option<String>("libs")
     .add_attr_option<String>("device");
 
-TVM_REGISTER_TARGET_ID("c")
+TVM_REGISTER_TARGET_ID("hybrid")
     .add_attr_option<Bool>("system-lib")
     .add_attr_option<String>("model")
     .add_attr_option<String>("libs")
     .add_attr_option<String>("device");
 
+TVM_REGISTER_TARGET_ID("c")
+    .add_attr_option<Bool>("system-lib")
+    .add_attr_option<String>("model")
+    .add_attr_option<String>("libs")
+    .add_attr_option<String>("device")
+    .set_device_type(kDLCPU);
+
+TVM_REGISTER_TARGET_ID("webgpu")
+    .add_attr_option<Bool>("system-lib")
+    .add_attr_option<String>("model")
+    .add_attr_option<String>("libs")
+    .add_attr_option<String>("device")
+    .set_device_type(kDLWebGPU);
+
+TVM_REGISTER_TARGET_ID("sdaccel")
+    .add_attr_option<Bool>("system-lib")
+    .add_attr_option<String>("model")
+    .add_attr_option<String>("libs")
+    .add_attr_option<String>("device")
+    .set_device_type(kDLOpenCL);
+
+TVM_REGISTER_TARGET_ID("aocl")
+    .add_attr_option<Bool>("system-lib")
+    .add_attr_option<String>("model")
+    .add_attr_option<String>("libs")
+    .add_attr_option<String>("device")
+    .set_device_type(kDLAOCL);
+
+TVM_REGISTER_TARGET_ID("aocl_sw_emu")
+    .add_attr_option<Bool>("system-lib")
+    .add_attr_option<String>("model")
+    .add_attr_option<String>("libs")
+    .add_attr_option<String>("device")
+    .set_device_type(kDLAOCL);
+
+TVM_REGISTER_TARGET_ID("nvptx")
+    .add_attr_option<Bool>("system-lib")
+    .add_attr_option<String>("model")
+    .add_attr_option<String>("libs")
+    .add_attr_option<String>("device")
+    .set_device_type(kDLGPU);
 
 }  // namespace tvm

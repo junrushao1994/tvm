@@ -47,8 +47,6 @@ class TargetNode : public Object {
   TargetId id;
   /*! \brief The name of the target device */
   std::string device_name;
-  /*! \brief The type of the target device */
-  int device_type;
   /*! \brief The maximum threads that a schedule should use for this device */
   int max_num_threads = 1;
   /*! \brief The warp size that should be used by the LowerThreadAllreduce pass */
@@ -66,10 +64,12 @@ class TargetNode : public Object {
   /*! \return the full device string to pass to codegen::Build */
   TVM_DLL const std::string& str() const;
 
+  int GetDeviceType() const;
+
   void VisitAttrs(AttrVisitor* v) {
     v->Visit("id", &id);
     v->Visit("device_name", &device_name);
-    v->Visit("device_type", &device_type);
+    // v->Visit("device_type", &device_type);
     v->Visit("max_num_threads", &max_num_threads);
     v->Visit("thread_warp_size", &thread_warp_size);
     v->Visit("keys_array", &keys_array);

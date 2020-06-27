@@ -194,14 +194,14 @@ Target CreateTarget(const std::string& name, const std::vector<std::string>& opt
   if (t->device_name.length() > 0) {
     t->keys_array.push_back(t->device_name);
   }
-  t->device_type = kDLCPU;
+  // t->device_type = kDLCPU;
   t->thread_warp_size = 1;
   if (name == "c" && t->device_name == "micro_dev") {
-    t->device_type = kDLMicroDev;
+    // t->device_type = kDLMicroDev;
   } else if (name == "c" || name == "llvm") {
     t->keys_array.push_back("cpu");
   } else if (name == "cuda" || name == "nvptx") {
-    t->device_type = kDLGPU;
+    // t->device_type = kDLGPU;
     t->keys_array.push_back("cuda");
     t->keys_array.push_back("gpu");
     t->max_num_threads = 1024;
@@ -209,9 +209,9 @@ Target CreateTarget(const std::string& name, const std::vector<std::string>& opt
   } else if (name == "rocm" || name == "opencl") {
     // For now assume rocm schedule for opencl
     if (name == "opencl") {
-      t->device_type = kDLOpenCL;
+      // t->device_type = kDLOpenCL;
     } else {  // rocm
-      t->device_type = kDLROCM;
+      // t->device_type = kDLROCM;
       t->thread_warp_size = 64;
     }
     t->keys_array.push_back(name);
@@ -222,35 +222,35 @@ Target CreateTarget(const std::string& name, const std::vector<std::string>& opt
     }
   } else if (name == "metal" || name == "vulkan" || name == "webgpu") {
     if (name == "metal") {
-      t->device_type = kDLMetal;
+      // t->device_type = kDLMetal;
     } else if (name == "vulkan") {
-      t->device_type = kDLVulkan;
+      // t->device_type = kDLVulkan;
     } else {
-      t->device_type = kDLWebGPU;
+      // t->device_type = kDLWebGPU;
     }
     t->keys_array.push_back(name);
     t->keys_array.push_back("gpu");
     t->max_num_threads = 256;
   } else if (name == "sdaccel") {
-    t->device_type = kDLOpenCL;
+    // t->device_type = kDLOpenCL;
     t->keys_array.push_back("sdaccel");
     t->keys_array.push_back("hls");
   } else if (name == "aocl" || name == "aocl_sw_emu") {
-    t->device_type = kDLAOCL;
+    // t->device_type = kDLAOCL;
     t->keys_array.push_back("aocl");
     t->keys_array.push_back("hls");
   } else if (name == "stackvm") {
-    t->device_type = kDLCPU;
+    // t->device_type = kDLCPU;
   } else if (name == "ext_dev") {
-    t->device_type = kDLExtDev;
+    // t->device_type = kDLExtDev;
   } else if (name == "hybrid") {
-    t->device_type = kDLCPU;
+    // t->device_type = kDLCPU;
   } else if (name == "hexagon") {
     t->keys_array.push_back("hexagon");
-    t->device_type = kDLHexagon;
+    // t->device_type = kDLHexagon;
   } else if (name == "webgpu") {
     t->keys_array.push_back("webgpu");
-    t->device_type = kDLWebGPU;
+    // t->device_type = kDLWebGPU;
   } else {
     LOG(ERROR) << "Unknown target name " << name << "; falling back to stackvm";
     return target::stackvm();

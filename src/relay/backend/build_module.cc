@@ -467,7 +467,7 @@ class RelayBuildModule : public runtime::ModuleNode {
     Target target_host = target_host_;
     if (!target_host_.defined()) {
       for (const auto& it : targets_) {
-        if (it.second->device_type == kDLCPU) {
+        if (it.second->id->device_type == kDLCPU) {
           target_host = it.second;
           break;
         }
