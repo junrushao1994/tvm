@@ -212,32 +212,36 @@ TVM_REGISTER_TARGET_ID("vulkan")
     .add_attr_option<Bool>("system-lib")
     .add_attr_option<String>("model")
     .add_attr_option<String>("libs")
-    .add_attr_option<String>("device");
+    .add_attr_option<String>("device")
+    .set_device_type(kDLVulkan);
 
 TVM_REGISTER_TARGET_ID("stackvm")
     .add_attr_option<Bool>("system-lib")
     .add_attr_option<String>("model")
     .add_attr_option<String>("libs")
     .add_attr_option<String>("device")
-    .set_device_type(kDLVulkan);
+    .set_device_type(kDLCPU);
 
 TVM_REGISTER_TARGET_ID("ext_dev")
     .add_attr_option<Bool>("system-lib")
     .add_attr_option<String>("model")
     .add_attr_option<String>("libs")
-    .add_attr_option<String>("device");
+    .add_attr_option<String>("device")
+    .set_device_type(kDLExtDev);
 
 TVM_REGISTER_TARGET_ID("hexagon")
     .add_attr_option<Bool>("system-lib")
     .add_attr_option<String>("model")
     .add_attr_option<String>("libs")
-    .add_attr_option<String>("device");
+    .add_attr_option<String>("device")
+    .set_device_type(kDLHexagon);
 
 TVM_REGISTER_TARGET_ID("hybrid")
     .add_attr_option<Bool>("system-lib")
     .add_attr_option<String>("model")
     .add_attr_option<String>("libs")
-    .add_attr_option<String>("device");
+    .add_attr_option<String>("device")
+    .set_device_type(kDLCPU);
 
 TVM_REGISTER_TARGET_ID("c")
     .add_attr_option<Bool>("system-lib")
