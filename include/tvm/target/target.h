@@ -64,8 +64,6 @@ class TargetNode : public Object {
   /*! \return the full device string to pass to codegen::Build */
   TVM_DLL const std::string& str() const;
 
-  int GetDeviceType() const;
-
   void VisitAttrs(AttrVisitor* v) {
     v->Visit("id", &id);
     v->Visit("device_name", &device_name);
