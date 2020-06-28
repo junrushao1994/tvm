@@ -40,8 +40,7 @@ class IntrinInjecter : public tvm::arith::IRMutatorWithAnalyzer {
   using IRMutatorWithAnalyzer::VisitExpr_;
   using IRMutatorWithAnalyzer::VisitStmt_;
 
-  IntrinInjecter(arith::Analyzer* analyzer, std::string target)
-      : IRMutatorWithAnalyzer(analyzer) {
+  IntrinInjecter(arith::Analyzer* analyzer, std::string target) : IRMutatorWithAnalyzer(analyzer) {
     patterns_.push_back("tvm.intrin.rule." + target + ".");
     patterns_.push_back("tvm.intrin.rule.default.");
     fma_ = runtime::Registry::Get(patterns_[0] + "fma");

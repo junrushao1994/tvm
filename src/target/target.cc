@@ -55,19 +55,12 @@ inline size_t CalcNumPrefixDashes(const std::string& s) {
   return i;
 }
 
-inline Target Target::NewCreate(const std::string& target_str) {
+Target Target::NewCreateTarget(const std::string& name, const std::vector<std::string>& options) {
   std::unordered_map<String, ObjectRef> attrs;
-  std::vector<std::string> splits;
-  {
-    std::istringstream is(target_str);
-    for (std::string s; is >> s; splits.push_back(s))
-      ;
-    CHECK(!splits.empty()) << "ValueError: Cannot parse empty string: \"" << target_str << "\"";
-  }
-  TargetId id = TargetId::Get(splits[0]);
+  TargetId id = TargetId::Get(name);
   const auto& key_vtype = id->key2vtype_;
-  for (size_t iter = 1, end = splits.size(); iter < end;) {
-    std::string s = splits[iter++];
+  for (size_t iter = 0, end = options.size(); iter < end;) {
+    std::string s = options[iter++];
     // remove the prefix dashes
     size_t n_dashes = CalcNumPrefixDashes(s);
     CHECK(0 < n_dashes && n_dashes < s.size())
@@ -81,12 +74,12 @@ inline Target Target::NewCreate(const std::string& target_str) {
       // case 1. --key=value
       name = s.substr(0, pos);
       obj = s.substr(pos + 1);
-      CHECK(!name.empty()) << "ValueError: Empty attribute key in \"" << splits[iter - 1] << "\"";
-      CHECK(!obj.empty()) << "ValueError: Empty attribute in \"" << splits[iter - 1] << "\"";
-    } else if (iter < end && splits[iter][0] != '-') {
+      CHECK(!name.empty()) << "ValueError: Empty attribute key in \"" << options[iter - 1] << "\"";
+      CHECK(!obj.empty()) << "ValueError: Empty attribute in \"" << options[iter - 1] << "\"";
+    } else if (iter < end && options[iter][0] != '-') {
       // case 2. --key value
       name = s;
-      obj = splits[iter++];
+      obj = options[iter++];
     } else {
       // case 3. --boolean-key
       name = s;
@@ -129,7 +122,7 @@ inline Target Target::NewCreate(const std::string& target_str) {
   }
   // set default attribute values if they do not exist
   const auto& key_default = id->key2default_;
-  for (const auto &kv : key_default) {
+  for (const auto& kv : key_default) {
     if (!attrs.count(kv.first)) {
       attrs[kv.first] = kv.second;
     }
@@ -137,6 +130,17 @@ inline Target Target::NewCreate(const std::string& target_str) {
   ObjectPtr<TargetNode> target = make_object<TargetNode>();
   target->attrs = attrs;
   return Target(target);
+}
+
+Target Target::NewCreate(const std::string& target_str) {
+  std::vector<std::string> splits;
+  std::istringstream is(target_str);
+  for (std::string s; is >> s; splits.push_back(s))
+    ;
+  CHECK(!splits.empty()) << "ValueError: Cannot parse empty string: \"" << target_str << "\"";
+  CHECK(!is.fail()) << "ValueError: Unknown error occurred when parsing target: \"" << target_str
+                    << "\"";
+  return NewCreateTarget(splits[0], {splits.begin() + 1, splits.end()});
 }
 
 TVM_REGISTER_NODE_TYPE(TargetNode);
@@ -156,16 +160,9 @@ TVM_STATIC_IR_FUNCTOR(ReprPrinter, vtable)
  * \return The constructed Target
  */
 Target CreateTarget(const std::string& name, const std::vector<std::string>& options) {
-  {
-    std::ostringstream os;
-    os << name;
-    for (const auto &s : options) {
-      os << ' ' << s;
-    }
-    Target::NewCreate(os.str());
-  }
   auto t = make_object<TargetNode>();
   t->id = TargetId::Get(name);
+  t->attrs = Target::NewCreateTarget(name, options)->attrs;
 
   std::string libs_flag = "-libs=";
   std::string device_flag = "-device=";
@@ -194,63 +191,40 @@ Target CreateTarget(const std::string& name, const std::vector<std::string>& opt
   if (t->device_name.length() > 0) {
     t->keys_array.push_back(t->device_name);
   }
-  // t->device_type = kDLCPU;
-  t->thread_warp_size = 1;
   if (name == "c" && t->device_name == "micro_dev") {
-    // t->device_type = kDLMicroDev;
+    // FIXME
   } else if (name == "c" || name == "llvm") {
     t->keys_array.push_back("cpu");
   } else if (name == "cuda" || name == "nvptx") {
-    // t->device_type = kDLGPU;
     t->keys_array.push_back("cuda");
     t->keys_array.push_back("gpu");
-    t->max_num_threads = 1024;
-    t->thread_warp_size = 32;
   } else if (name == "rocm" || name == "opencl") {
     // For now assume rocm schedule for opencl
-    if (name == "opencl") {
-      // t->device_type = kDLOpenCL;
-    } else {  // rocm
-      // t->device_type = kDLROCM;
-      t->thread_warp_size = 64;
-    }
     t->keys_array.push_back(name);
     t->keys_array.push_back("gpu");
-    t->max_num_threads = 256;
     if (t->device_name == "intel_graphics") {
-      t->thread_warp_size = 16;
+      t->attrs.Set("thread_warp_size", Integer(16));
     }
   } else if (name == "metal" || name == "vulkan" || name == "webgpu") {
     if (name == "metal") {
-      // t->device_type = kDLMetal;
     } else if (name == "vulkan") {
-      // t->device_type = kDLVulkan;
     } else {
-      // t->device_type = kDLWebGPU;
     }
     t->keys_array.push_back(name);
     t->keys_array.push_back("gpu");
-    t->max_num_threads = 256;
   } else if (name == "sdaccel") {
-    // t->device_type = kDLOpenCL;
     t->keys_array.push_back("sdaccel");
     t->keys_array.push_back("hls");
   } else if (name == "aocl" || name == "aocl_sw_emu") {
-    // t->device_type = kDLAOCL;
     t->keys_array.push_back("aocl");
     t->keys_array.push_back("hls");
   } else if (name == "stackvm") {
-    // t->device_type = kDLCPU;
   } else if (name == "ext_dev") {
-    // t->device_type = kDLExtDev;
   } else if (name == "hybrid") {
-    // t->device_type = kDLCPU;
   } else if (name == "hexagon") {
     t->keys_array.push_back("hexagon");
-    // t->device_type = kDLHexagon;
   } else if (name == "webgpu") {
     t->keys_array.push_back("webgpu");
-    // t->device_type = kDLWebGPU;
   } else {
     LOG(ERROR) << "Unknown target name " << name << "; falling back to stackvm";
     return target::stackvm();

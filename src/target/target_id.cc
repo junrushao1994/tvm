@@ -106,9 +106,11 @@ void TargetIdNode::ValidateSchema(const Map<String, ObjectRef>& config) const {
     const ObjectRef& obj = kv.second;
     if (name == kTargetId) {
       CHECK(obj->IsInstance<StringObj>())
-          << "AttributeError: \"id\" is not a string, but its type is \"" << obj->GetTypeKey() << "\"";
+          << "AttributeError: \"id\" is not a string, but its type is \"" << obj->GetTypeKey()
+          << "\"";
       CHECK(Downcast<String>(obj) == this->name)
-          << "AttributeError: \"id\" = \"" << obj << "\" is inconsistent with TargetId \"" << this->name << "\"";
+          << "AttributeError: \"id\" = \"" << obj << "\" is inconsistent with TargetId \""
+          << this->name << "\"";
       continue;
     }
     auto it = key2vtype_.find(name);
@@ -185,6 +187,17 @@ TVM_REGISTER_TARGET_ID("cuda")
     .add_attr_option<String>("model")
     .add_attr_option<String>("libs")
     .add_attr_option<String>("device")
+    .add_attr_option<Integer>("max_num_threads", Integer(1024))
+    .add_attr_option<Integer>("thread_warp_size", Integer(32))
+    .set_device_type(kDLGPU);
+
+TVM_REGISTER_TARGET_ID("nvptx")
+    .add_attr_option<Bool>("system-lib")
+    .add_attr_option<String>("model")
+    .add_attr_option<String>("libs")
+    .add_attr_option<String>("device")
+    .add_attr_option<Integer>("max_num_threads", Integer(1024))
+    .add_attr_option<Integer>("thread_warp_size", Integer(32))
     .set_device_type(kDLGPU);
 
 TVM_REGISTER_TARGET_ID("rocm")
@@ -192,6 +205,8 @@ TVM_REGISTER_TARGET_ID("rocm")
     .add_attr_option<String>("model")
     .add_attr_option<String>("libs")
     .add_attr_option<String>("device")
+    .add_attr_option<Integer>("max_num_threads", Integer(256))
+    .add_attr_option<Integer>("thread_warp_size", Integer(64))
     .set_device_type(kDLROCM);
 
 TVM_REGISTER_TARGET_ID("opencl")
@@ -199,6 +214,7 @@ TVM_REGISTER_TARGET_ID("opencl")
     .add_attr_option<String>("model")
     .add_attr_option<String>("libs")
     .add_attr_option<String>("device")
+    .add_attr_option<Integer>("max_num_threads", Integer(256))
     .set_device_type(kDLOpenCL);
 
 TVM_REGISTER_TARGET_ID("metal")
@@ -206,6 +222,7 @@ TVM_REGISTER_TARGET_ID("metal")
     .add_attr_option<String>("model")
     .add_attr_option<String>("libs")
     .add_attr_option<String>("device")
+    .add_attr_option<Integer>("max_num_threads", Integer(256))
     .set_device_type(kDLMetal);
 
 TVM_REGISTER_TARGET_ID("vulkan")
@@ -213,7 +230,16 @@ TVM_REGISTER_TARGET_ID("vulkan")
     .add_attr_option<String>("model")
     .add_attr_option<String>("libs")
     .add_attr_option<String>("device")
+    .add_attr_option<Integer>("max_num_threads", Integer(256))
     .set_device_type(kDLVulkan);
+
+TVM_REGISTER_TARGET_ID("webgpu")
+    .add_attr_option<Bool>("system-lib")
+    .add_attr_option<String>("model")
+    .add_attr_option<String>("libs")
+    .add_attr_option<String>("device")
+    .add_attr_option<Integer>("max_num_threads", Integer(256))
+    .set_device_type(kDLWebGPU);
 
 TVM_REGISTER_TARGET_ID("stackvm")
     .add_attr_option<Bool>("system-lib")
@@ -250,13 +276,6 @@ TVM_REGISTER_TARGET_ID("c")
     .add_attr_option<String>("device")
     .set_device_type(kDLCPU);
 
-TVM_REGISTER_TARGET_ID("webgpu")
-    .add_attr_option<Bool>("system-lib")
-    .add_attr_option<String>("model")
-    .add_attr_option<String>("libs")
-    .add_attr_option<String>("device")
-    .set_device_type(kDLWebGPU);
-
 TVM_REGISTER_TARGET_ID("sdaccel")
     .add_attr_option<Bool>("system-lib")
     .add_attr_option<String>("model")
@@ -277,12 +296,5 @@ TVM_REGISTER_TARGET_ID("aocl_sw_emu")
     .add_attr_option<String>("libs")
     .add_attr_option<String>("device")
     .set_device_type(kDLAOCL);
-
-TVM_REGISTER_TARGET_ID("nvptx")
-    .add_attr_option<Bool>("system-lib")
-    .add_attr_option<String>("model")
-    .add_attr_option<String>("libs")
-    .add_attr_option<String>("device")
-    .set_device_type(kDLGPU);
 
 }  // namespace tvm

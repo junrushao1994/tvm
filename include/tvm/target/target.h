@@ -47,10 +47,6 @@ class TargetNode : public Object {
   TargetId id;
   /*! \brief The name of the target device */
   std::string device_name;
-  /*! \brief The maximum threads that a schedule should use for this device */
-  int max_num_threads = 1;
-  /*! \brief The warp size that should be used by the LowerThreadAllreduce pass */
-  int thread_warp_size = 1;
   /*! \brief Keys for this target */
   Array<String> keys_array;
   /*! \brief Options for this target */
@@ -67,12 +63,29 @@ class TargetNode : public Object {
   void VisitAttrs(AttrVisitor* v) {
     v->Visit("id", &id);
     v->Visit("device_name", &device_name);
-    // v->Visit("device_type", &device_type);
-    v->Visit("max_num_threads", &max_num_threads);
-    v->Visit("thread_warp_size", &thread_warp_size);
     v->Visit("keys_array", &keys_array);
     v->Visit("options_array", &options_array);
     v->Visit("libs_array", &libs_array);
+    v->Visit("attrs", &attrs);
+  }
+
+  template <typename TObjectRef>
+  Optional<TObjectRef> GetAttr(
+      const std::string& attr_key,
+      Optional<TObjectRef> default_value = Optional<TObjectRef>(nullptr)) const {
+    static_assert(std::is_base_of<ObjectRef, TObjectRef>::value,
+                  "Can only call GetAttr with ObjectRef types.");
+    auto it = attrs.find(attr_key);
+    if (it != attrs.end()) {
+      return Downcast<Optional<TObjectRef>>((*it).second);
+    } else {
+      return default_value;
+    }
+  }
+
+  template <typename TObjectRef>
+  Optional<TObjectRef> GetAttr(const std::string& attr_key, TObjectRef default_value) const {
+    return GetAttr<TObjectRef>(attr_key, Optional<TObjectRef>(default_value));
   }
 
   /*! \brief Get the keys for this target as a vector of string */
@@ -106,6 +119,8 @@ class Target : public ObjectRef {
    */
   TVM_DLL static Target Create(const std::string& target_str);
   TVM_DLL static Target NewCreate(const std::string& target_str);
+  TVM_DLL static Target NewCreateTarget(const std::string& name,
+                                        const std::vector<std::string>& options);
   /*!
    * \brief Get the current target context from thread local storage.
    * \param allow_not_defined If the context stack is empty and this is set to true, an
@@ -136,8 +151,6 @@ class Target : public ObjectRef {
    *  restoring the previous target as the current context.
    */
   TVM_DLL void ExitWithScope();
-
-  TVM_DLL static Target NewCreateTarget(const std::string& name, const std::vector<std::string>& options);
 };
 
 /*! \brief This namespace provides functions to construct Target instances */
