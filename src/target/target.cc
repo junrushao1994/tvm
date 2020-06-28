@@ -167,6 +167,7 @@ Target CreateTarget(const std::string& name, const std::vector<std::string>& opt
   std::string libs_flag = "-libs=";
   std::string device_flag = "-device=";
   std::string keys_flag = "-keys=";
+  std::string device_name;
   for (auto& item : options) {
     t->options_array.push_back(item);
 
@@ -177,8 +178,9 @@ Target CreateTarget(const std::string& name, const std::vector<std::string>& opt
         t->libs_array.push_back(lib_item);
       }
     } else if (item.find(device_flag) == 0) {
-      t->device_name = item.substr(device_flag.length());
-      t->keys_array.push_back(t->device_name);
+      device_name = item.substr(device_flag.length());
+      t->keys_array.push_back(device_name);
+      t->attrs.Set("device_name", String(device_name));
     } else if (item.find(keys_flag) == 0) {
       std::stringstream ss(item.substr(keys_flag.length()));
       std::string key_item;
@@ -188,10 +190,10 @@ Target CreateTarget(const std::string& name, const std::vector<std::string>& opt
     }
   }
 
-  if (t->device_name.length() > 0) {
-    t->keys_array.push_back(t->device_name);
+  if (device_name.length() > 0) {
+    t->keys_array.push_back(device_name);
   }
-  if (name == "c" && t->device_name == "micro_dev") {
+  if (name == "c" && device_name == "micro_dev") {
     // FIXME
   } else if (name == "c" || name == "llvm") {
     t->keys_array.push_back("cpu");
@@ -202,7 +204,7 @@ Target CreateTarget(const std::string& name, const std::vector<std::string>& opt
     // For now assume rocm schedule for opencl
     t->keys_array.push_back(name);
     t->keys_array.push_back("gpu");
-    if (t->device_name == "intel_graphics") {
+    if (device_name == "intel_graphics") {
       t->attrs.Set("thread_warp_size", Integer(16));
     }
   } else if (name == "metal" || name == "vulkan" || name == "webgpu") {

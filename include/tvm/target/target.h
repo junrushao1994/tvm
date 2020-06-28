@@ -45,8 +45,6 @@ class TargetNode : public Object {
  public:
   /*! \brief The id of the target device */
   TargetId id;
-  /*! \brief The name of the target device */
-  std::string device_name;
   /*! \brief Keys for this target */
   Array<String> keys_array;
   /*! \brief Options for this target */
@@ -54,7 +52,7 @@ class TargetNode : public Object {
   /*! \brief Collection of imported libs */
   Array<String> libs_array;
 
-  /*! \brief Collection of imported libs */
+  /*! \brief Collection of attributes */
   Map<String, ObjectRef> attrs;
 
   /*! \return the full device string to pass to codegen::Build */
@@ -62,7 +60,6 @@ class TargetNode : public Object {
 
   void VisitAttrs(AttrVisitor* v) {
     v->Visit("id", &id);
-    v->Visit("device_name", &device_name);
     v->Visit("keys_array", &keys_array);
     v->Visit("options_array", &options_array);
     v->Visit("libs_array", &libs_array);

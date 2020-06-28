@@ -295,7 +295,8 @@ runtime::Module build(const Map<String, IRModule>& inputs, const Target& target_
   Map<Target, IRModule> updated_input;
   for (const auto& it : inputs) {
     auto target = Target::Create(it.first);
-    if (target->device_name == "vta") {
+    Optional<String> device_name = target->GetAttr<String>("device_name");
+    if (device_name.defined() && device_name.value() == "vta") {
       target = Target::Create("ext_dev");
     }
     updated_input.Set(target, it.second);

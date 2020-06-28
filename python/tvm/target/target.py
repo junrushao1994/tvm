@@ -109,11 +109,18 @@ class Target(Object):
         """
         return _ffi_api.GetCurrentTarget(allow_none)
 
+    @property
     def max_num_threads(self):
         return self.attrs["max_num_threads"]
 
+    @property
     def thread_warp_size(self):
         return self.attrs["thread_warp_size"]
+
+    @property
+    def device_name(self):
+        return self.attrs.get("device_name", "")
+
 
 def _merge_opts(opts, new_opts):
     """Helper function to merge options"""
