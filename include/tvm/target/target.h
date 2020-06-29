@@ -47,11 +47,8 @@ class TargetNode : public Object {
   TargetId id;
   /*! \brief Keys for this target */
   Array<String> keys;
-  /*! \brief Options for this target */
-  Array<String> options_array;
   /*! \brief Collection of imported libs */
   Array<String> libs_array;
-
   /*! \brief Collection of attributes */
   Map<String, ObjectRef> attrs;
 
@@ -61,7 +58,6 @@ class TargetNode : public Object {
   void VisitAttrs(AttrVisitor* v) {
     v->Visit("id", &id);
     v->Visit("keys_", &keys);
-    v->Visit("options_array", &options_array);
     v->Visit("libs_array", &libs_array);
     v->Visit("attrs", &attrs);
   }
@@ -88,9 +84,6 @@ class TargetNode : public Object {
   /*! \brief Get the keys for this target as a vector of string */
   TVM_DLL std::vector<std::string> GetKeys() const;
 
-  /*! \brief Get the options for this target as a vector of string */
-  TVM_DLL std::vector<std::string> options() const;
-
   /*! \brief Get the keys for this target as an unordered_set of string */
   TVM_DLL std::unordered_set<std::string> libs() const;
 
@@ -100,6 +93,7 @@ class TargetNode : public Object {
  private:
   /*! \brief Internal string repr. */
   mutable std::string str_repr_;
+  friend class Target;
 };
 
 /*!

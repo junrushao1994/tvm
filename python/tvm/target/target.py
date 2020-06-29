@@ -48,7 +48,6 @@ class Target(Object):
         # Always override new to enable class
         obj = Object.__new__(cls)
         obj._keys = None
-        obj._options = None
         obj._libs = None
         return obj
 
@@ -59,33 +58,10 @@ class Target(Object):
         return self._keys
 
     @property
-    def options(self):
-        if not self._options:
-            self._options = [str(o) for o in self.options_array]
-        return self._options
-
-    @property
     def libs(self):
         if not self._libs:
             self._libs = [str(l) for l in self.libs_array]
         return self._libs
-
-    @property
-    def model(self):
-        for opt in self.options_array:
-            if opt.startswith('-model='):
-                return opt[7:]
-        return 'unknown'
-
-    @property
-    def mcpu(self):
-        """Returns the mcpu from the target if it exists."""
-        mcpu = ''
-        if self.options is not None:
-            for opt in self.options:
-                if 'mcpu' in opt:
-                    mcpu = opt.split('=')[1]
-        return mcpu
 
     def __enter__(self):
         _ffi_api.EnterTargetScope(self)
@@ -120,6 +96,21 @@ class Target(Object):
     @property
     def device_name(self):
         return self.attrs.get("device_name", "")
+
+    @property
+    def model(self):
+        """Returns model from the target if it exists."""
+        return self.attrs.get("model", "unknown")
+
+    @property
+    def mcpu(self):
+        """Returns the mcpu from the target if it exists."""
+        return self.attrs.get("mcpu", "")
+
+    @property
+    def mattr(self):
+        """Returns the mattr from the target if it exists."""
+        return self.attrs.get("mattr", "")
 
 
 def _merge_opts(opts, new_opts):

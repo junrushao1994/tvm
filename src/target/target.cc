@@ -127,8 +127,17 @@ Target Target::NewCreateTarget(const std::string& name, const std::vector<std::s
       attrs[kv.first] = kv.second;
     }
   }
+  std::ostringstream str_repr;
+  {
+    str_repr << name;
+    for (const auto &s : options) {
+      str_repr << ' ' << s;
+    }
+  }
   ObjectPtr<TargetNode> target = make_object<TargetNode>();
+  target->id = id;
   target->attrs = attrs;
+  target->str_repr_ = str_repr.str();
   return Target(target);
 }
 
@@ -160,18 +169,14 @@ TVM_STATIC_IR_FUNCTOR(ReprPrinter, vtable)
  * \return The constructed Target
  */
 Target CreateTarget(const std::string& name, const std::vector<std::string>& options) {
-  auto t = make_object<TargetNode>();
-  t->id = TargetId::Get(name);
-  t->attrs = Target::NewCreateTarget(name, options)->attrs;
-
+  Target _t = Target::NewCreateTarget(name, options);
+  TargetNode *t = const_cast<TargetNode*>(_t.as<TargetNode>());
   std::string libs_flag = "-libs=";
   std::string device_flag = "-device=";
   std::string keys_flag = "-keys=";
   std::string device_name;
   std::vector<String> keys;
   for (auto& item : options) {
-    t->options_array.push_back(item);
-
     if (item.find(libs_flag) == 0) {
       std::stringstream ss(item.substr(libs_flag.length()));
       std::string lib_item;
@@ -228,7 +233,7 @@ Target CreateTarget(const std::string& name, const std::vector<std::string>& opt
   }
   t->attrs.Set("device_name", String(device_name));
   t->keys = keys;
-  return Target(t);
+  return _t;
 }
 
 TVM_REGISTER_GLOBAL("target.TargetCreate").set_body([](TVMArgs args, TVMRetValue* ret) {
@@ -255,14 +260,6 @@ std::vector<std::string> TargetNode::GetKeys() const {
   return result;
 }
 
-std::vector<std::string> TargetNode::options() const {
-  std::vector<std::string> result;
-  for (auto& expr : options_array) {
-    result.push_back(expr);
-  }
-  return result;
-}
-
 std::unordered_set<std::string> TargetNode::libs() const {
   std::unordered_set<std::string> result;
   for (auto& expr : libs_array) {
@@ -272,13 +269,6 @@ std::unordered_set<std::string> TargetNode::libs() const {
 }
 
 const std::string& TargetNode::str() const {
-  if (str_repr_.length() != 0) return str_repr_;
-  std::ostringstream result;
-  result << id->name;
-  for (const auto& x : options()) {
-    result << " " << x;
-  }
-  str_repr_ = result.str();
   return str_repr_;
 }
 
