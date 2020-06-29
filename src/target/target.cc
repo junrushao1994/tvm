@@ -55,10 +55,11 @@ inline size_t CalcNumPrefixDashes(const std::string& s) {
   return i;
 }
 
-Target Target::NewCreateTarget(const std::string& name, const std::vector<std::string>& options) {
+Map<String, ObjectRef> ParseTargetAttrs(
+    const std::vector<std::string>& options,
+    const std::unordered_map<String, TargetIdNode::ValueTypeInfo>& key_vtype,
+    const std::unordered_map<String, ObjectRef>& key_default) {
   std::unordered_map<String, ObjectRef> attrs;
-  TargetId id = TargetId::Get(name);
-  const auto& key_vtype = id->key2vtype_;
   for (size_t iter = 0, end = options.size(); iter < end;) {
     std::string s = options[iter++];
     // remove the prefix dashes
@@ -121,37 +122,51 @@ Target Target::NewCreateTarget(const std::string& name, const std::vector<std::s
     }
   }
   // set default attribute values if they do not exist
-  const auto& key_default = id->key2default_;
   for (const auto& kv : key_default) {
     if (!attrs.count(kv.first)) {
       attrs[kv.first] = kv.second;
     }
   }
-  std::ostringstream str_repr;
+  return attrs;
+}
+
+Target Target::CreateTarget(const std::string& name, const std::vector<std::string>& options) {
+  TargetId id = TargetId::Get(name);
+  ObjectPtr<TargetNode> target = make_object<TargetNode>();
+  target->id = id;
+  // parse attrs
+  target->attrs = ParseTargetAttrs(options, id->key2vtype_, id->key2default_);
+  String device_name = target->GetAttr<String>("device", "").value();
+  // create string representation
   {
+    std::ostringstream str_repr;
     str_repr << name;
     for (const auto& s : options) {
       str_repr << ' ' << s;
     }
+    target->str_repr_ = str_repr.str();
   }
-  ObjectPtr<TargetNode> target = make_object<TargetNode>();
-  target->id = id;
-  target->attrs = attrs;
-  target->str_repr_ = str_repr.str();
+  // correct `thread_warp_size` for intel_graphics
+  if (name == "opencl" && device_name == "intel_graphics") {
+    target->attrs.Set("thread_warp_size", Integer(16));
+  }
+  // set up keys
+  {
+    Array<String> keys = target->id->default_keys;
+    // add `device_name`
+    if (!device_name.empty()) {
+      keys.push_back(device_name);
+    }
+    // add user provided keys
+    std::istringstream is(target->GetAttr<String>("keys", "").value());
+    for (std::string item; std::getline(is, item, ',');) {
+      keys.push_back(item);
+    }
+    target->keys = std::move(keys);
+  }
   return Target(target);
 }
-/*
-Target Target::NewCreate(const std::string& target_str) {
-  std::vector<std::string> splits;
-  std::istringstream is(target_str);
-  for (std::string s; is >> s; splits.push_back(s))
-    ;
-  CHECK(!splits.empty()) << "ValueError: Cannot parse empty string: \"" << target_str << "\"";
-  CHECK(!is.fail()) << "ValueError: Unknown error occurred when parsing target: \"" << target_str
-                    << "\"";
-  return NewCreateTarget(splits[0], {splits.begin() + 1, splits.end()});
-}
-*/
+
 TVM_REGISTER_NODE_TYPE(TargetNode);
 
 TVM_STATIC_IR_FUNCTOR(ReprPrinter, vtable)
@@ -159,39 +174,6 @@ TVM_STATIC_IR_FUNCTOR(ReprPrinter, vtable)
       auto* op = static_cast<const TargetNode*>(node.get());
       p->stream << op->str();
     });
-
-/*!
- * \brief Construct a Target node from the given name and options.
- * \param name The major target name. Should be one of
- * {"aocl", "aocl_sw_emu", "c", "cuda", "ext_dev", "hexagon", "hybrid", "llvm",
- *  "metal", "nvptx", "opencl", "rocm", "sdaccel", "stackvm", "vulkan"}
- * \param options Additional options appended to the target
- * \return The constructed Target
- */
-Target CreateTarget(const std::string& name, const std::vector<std::string>& options) {
-  Target _t = Target::NewCreateTarget(name, options);
-  TargetNode* t = const_cast<TargetNode*>(_t.as<TargetNode>());
-  String device_name = t->GetAttr<String>("device", "").value();
-  // set up `thread_warp_size`
-  if (name == "opencl" && device_name == "intel_graphics") {
-    t->attrs.Set("thread_warp_size", Integer(16));
-  }
-  // set up keys
-  Array<String> keys = _t->id->default_keys;
-  {
-    // add `device_name`
-    if (!device_name.empty()) {
-      keys.push_back(device_name);
-    }
-    // add specified keys
-    std::istringstream is(t->GetAttr<String>("keys", "").value());
-    for (std::string item; std::getline(is, item, ','); ) {
-      keys.push_back(item);
-    }
-  }
-  t->keys = std::move(keys);
-  return _t;
-}
 
 TVM_REGISTER_GLOBAL("target.TargetCreate").set_body([](TVMArgs args, TVMRetValue* ret) {
   std::string name = args[0];
@@ -201,7 +183,7 @@ TVM_REGISTER_GLOBAL("target.TargetCreate").set_body([](TVMArgs args, TVMRetValue
     options.push_back(arg);
   }
 
-  *ret = CreateTarget(name, options);
+  *ret = Target::CreateTarget(name, options);
 });
 
 TVM_REGISTER_GLOBAL("target.TargetFromString").set_body([](TVMArgs args, TVMRetValue* ret) {
@@ -240,18 +222,13 @@ bool StartsWith(const std::string& str, const std::string& pattern) {
 }
 
 Target Target::Create(const std::string& target_str) {
-  if (target_str.length() == 0) {
-    LOG(FATAL) << "target_str must not be empty";
-  }
-  std::istringstream ss(target_str);
-  std::string name;
-  ss >> name;
-  std::vector<std::string> options;
-  std::string item;
-  while (ss >> item) {
-    options.push_back(item);
-  }
-  return CreateTarget(name, options);
+  std::vector<std::string> splits;
+  std::istringstream is(target_str);
+  for (std::string s; is >> s; splits.push_back(s))
+    ;
+  CHECK(!splits.empty()) << "ValueError: Cannot parse empty target string: \"" << target_str
+                         << "\"";
+  return CreateTarget(splits[0], {splits.begin() + 1, splits.end()});
 }
 
 /*! \brief Entry to hold the Target context stack. */
@@ -307,28 +284,44 @@ std::vector<std::string> MergeOptions(std::vector<std::string> opts,
   return opts;
 }
 
-Target llvm(const std::vector<std::string>& options) { return CreateTarget("llvm", options); }
+Target llvm(const std::vector<std::string>& options) {
+  return Target::CreateTarget("llvm", options);
+}
 
-Target cuda(const std::vector<std::string>& options) { return CreateTarget("cuda", options); }
+Target cuda(const std::vector<std::string>& options) {
+  return Target::CreateTarget("cuda", options);
+}
 
-Target rocm(const std::vector<std::string>& options) { return CreateTarget("rocm", options); }
+Target rocm(const std::vector<std::string>& options) {
+  return Target::CreateTarget("rocm", options);
+}
 
-Target opencl(const std::vector<std::string>& options) { return CreateTarget("opencl", options); }
+Target opencl(const std::vector<std::string>& options) {
+  return Target::CreateTarget("opencl", options);
+}
 
-Target metal(const std::vector<std::string>& options) { return CreateTarget("metal", options); }
+Target metal(const std::vector<std::string>& options) {
+  return Target::CreateTarget("metal", options);
+}
 
 Target mali(const std::vector<std::string>& options) {
-  return CreateTarget("opencl", MergeOptions(options, {"-device=mali"}));
+  return Target::CreateTarget("opencl", MergeOptions(options, {"-device=mali"}));
 }
 
 Target intel_graphics(const std::vector<std::string>& options) {
-  return CreateTarget("opencl", MergeOptions(options, {"-device=intel_graphics"}));
+  return Target::CreateTarget("opencl", MergeOptions(options, {"-device=intel_graphics"}));
 }
 
-Target stackvm(const std::vector<std::string>& options) { return CreateTarget("stackvm", options); }
+Target stackvm(const std::vector<std::string>& options) {
+  return Target::CreateTarget("stackvm", options);
+}
 
-Target ext_dev(const std::vector<std::string>& options) { return CreateTarget("ext_dev", options); }
+Target ext_dev(const std::vector<std::string>& options) {
+  return Target::CreateTarget("ext_dev", options);
+}
 
-Target hexagon(const std::vector<std::string>& options) { return CreateTarget("hexagon", options); }
+Target hexagon(const std::vector<std::string>& options) {
+  return Target::CreateTarget("hexagon", options);
+}
 }  // namespace target
 }  // namespace tvm

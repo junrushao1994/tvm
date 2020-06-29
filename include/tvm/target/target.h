@@ -107,8 +107,16 @@ class Target : public ObjectRef {
    * \param target_str the string to parse
    */
   TVM_DLL static Target Create(const std::string& target_str);
-  TVM_DLL static Target NewCreateTarget(const std::string& name,
-                                        const std::vector<std::string>& options);
+  /*!
+   * \brief Construct a Target node from the given name and options.
+   * \param name The major target name. Should be one of
+   * {"aocl", "aocl_sw_emu", "c", "cuda", "ext_dev", "hexagon", "hybrid", "llvm",
+   *  "metal", "nvptx", "opencl", "rocm", "sdaccel", "stackvm", "vulkan"}
+   * \param options Additional options appended to the target
+   * \return The constructed Target
+   */
+  TVM_DLL static Target CreateTarget(const std::string& name,
+                                     const std::vector<std::string>& options);
   /*!
    * \brief Get the current target context from thread local storage.
    * \param allow_not_defined If the context stack is empty and this is set to true, an
