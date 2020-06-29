@@ -130,7 +130,7 @@ Target Target::NewCreateTarget(const std::string& name, const std::vector<std::s
   std::ostringstream str_repr;
   {
     str_repr << name;
-    for (const auto &s : options) {
+    for (const auto& s : options) {
       str_repr << ' ' << s;
     }
   }
@@ -170,7 +170,7 @@ TVM_STATIC_IR_FUNCTOR(ReprPrinter, vtable)
  */
 Target CreateTarget(const std::string& name, const std::vector<std::string>& options) {
   Target _t = Target::NewCreateTarget(name, options);
-  TargetNode *t = const_cast<TargetNode*>(_t.as<TargetNode>());
+  TargetNode* t = const_cast<TargetNode*>(_t.as<TargetNode>());
   std::string libs_flag = "-libs=";
   std::string device_flag = "-device=";
   std::string keys_flag = "-keys=";
@@ -268,9 +268,7 @@ std::unordered_set<std::string> TargetNode::libs() const {
   return result;
 }
 
-const std::string& TargetNode::str() const {
-  return str_repr_;
-}
+const std::string& TargetNode::str() const { return str_repr_; }
 
 bool StartsWith(const std::string& str, const std::string& pattern) {
   return str.compare(0, pattern.length(), pattern) == 0;
@@ -293,7 +291,7 @@ std::string GetDeviceName(const std::string& target_str) {
 
 Target Target::Create(const std::string& target_str) {
   if (target_str.length() == 0) {
-    LOG(ERROR) << "target_str must not be empty";
+    LOG(FATAL) << "target_str must not be empty";
   }
 
   std::istringstream ss(target_str);
