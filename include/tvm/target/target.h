@@ -60,6 +60,7 @@ class TargetNode : public Object {
     v->Visit("keys_", &keys);
     v->Visit("libs_array", &libs_array);
     v->Visit("attrs", &attrs);
+    v->Visit("_str_repr_", &str_repr_);
   }
 
   template <typename TObjectRef>

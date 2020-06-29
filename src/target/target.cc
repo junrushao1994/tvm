@@ -268,7 +268,10 @@ std::unordered_set<std::string> TargetNode::libs() const {
   return result;
 }
 
-const std::string& TargetNode::str() const { return str_repr_; }
+const std::string& TargetNode::str() const {
+  CHECK(!str_repr_.empty());
+  return str_repr_;
+}
 
 bool StartsWith(const std::string& str, const std::string& pattern) {
   return str.compare(0, pattern.length(), pattern) == 0;
