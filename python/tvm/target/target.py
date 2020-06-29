@@ -57,12 +57,6 @@ class Target(Object):
             self._keys = [str(k) for k in self.keys_]
         return self._keys
 
-    @property
-    def libs(self):
-        if not self._libs:
-            self._libs = [str(l) for l in self.libs_array]
-        return self._libs
-
     def __enter__(self):
         _ffi_api.EnterTargetScope(self)
         return self
@@ -111,6 +105,13 @@ class Target(Object):
     def mattr(self):
         """Returns the mattr from the target if it exists."""
         return self.attrs.get("mattr", "")
+
+    @property
+    def libs(self):
+        if not self._libs:
+            self._libs = list(self.attrs.get("libs", "").split(","))
+        return self._libs
+
 
 
 def _merge_opts(opts, new_opts):

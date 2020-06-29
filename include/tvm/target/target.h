@@ -47,8 +47,6 @@ class TargetNode : public Object {
   TargetId id;
   /*! \brief Keys for this target */
   Array<String> keys;
-  /*! \brief Collection of imported libs */
-  Array<String> libs_array;
   /*! \brief Collection of attributes */
   Map<String, ObjectRef> attrs;
 
@@ -58,7 +56,6 @@ class TargetNode : public Object {
   void VisitAttrs(AttrVisitor* v) {
     v->Visit("id", &id);
     v->Visit("keys_", &keys);
-    v->Visit("libs_array", &libs_array);
     v->Visit("attrs", &attrs);
     v->Visit("_str_repr_", &str_repr_);
   }
@@ -86,7 +83,7 @@ class TargetNode : public Object {
   TVM_DLL std::vector<std::string> GetKeys() const;
 
   /*! \brief Get the keys for this target as an unordered_set of string */
-  TVM_DLL std::unordered_set<std::string> libs() const;
+  TVM_DLL std::unordered_set<std::string> GetLibs() const;
 
   static constexpr const char* _type_key = "Target";
   TVM_DECLARE_FINAL_OBJECT_INFO(TargetNode, Object);

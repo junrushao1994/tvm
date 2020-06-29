@@ -176,7 +176,7 @@ TVM_REGISTER_TARGET_ID("llvm")
     .add_attr_option<Bool>("system-lib")
     .add_attr_option<String>("mcpu")
     .add_attr_option<String>("mattr")
-    .add_attr_option<String>("target")  // FIXME: rename to target
+    .add_attr_option<String>("target")  // FIXME: rename to mtriple
     .add_attr_option<String>("mtriple")
     .add_attr_option<String>("libs")
     .add_attr_option<String>("model")

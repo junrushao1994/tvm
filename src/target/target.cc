@@ -171,19 +171,12 @@ TVM_STATIC_IR_FUNCTOR(ReprPrinter, vtable)
 Target CreateTarget(const std::string& name, const std::vector<std::string>& options) {
   Target _t = Target::NewCreateTarget(name, options);
   TargetNode* t = const_cast<TargetNode*>(_t.as<TargetNode>());
-  std::string libs_flag = "-libs=";
   std::string device_flag = "-device=";
   std::string keys_flag = "-keys=";
   std::string device_name;
   std::vector<String> keys;
   for (auto& item : options) {
-    if (item.find(libs_flag) == 0) {
-      std::stringstream ss(item.substr(libs_flag.length()));
-      std::string lib_item;
-      while (std::getline(ss, lib_item, ',')) {
-        t->libs_array.push_back(lib_item);
-      }
-    } else if (item.find(device_flag) == 0) {
+    if (item.find(device_flag) == 0) {
       device_name = item.substr(device_flag.length());
       keys.push_back(device_name);
     } else if (item.find(keys_flag) == 0) {
@@ -260,10 +253,15 @@ std::vector<std::string> TargetNode::GetKeys() const {
   return result;
 }
 
-std::unordered_set<std::string> TargetNode::libs() const {
+std::unordered_set<std::string> TargetNode::GetLibs() const {
+  Optional<String> libs = this->GetAttr<String>("libs");
+  if (!libs.defined()) {
+    return {};
+  }
   std::unordered_set<std::string> result;
-  for (auto& expr : libs_array) {
-    result.insert(expr);
+  std::istringstream is(libs.value());
+  for (std::string item; std::getline(is, item, ',');) {
+    result.insert(item);
   }
   return result;
 }
