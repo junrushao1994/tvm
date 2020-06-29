@@ -46,7 +46,7 @@ class TargetNode : public Object {
   /*! \brief The id of the target device */
   TargetId id;
   /*! \brief Keys for this target */
-  Array<String> keys_array;
+  Array<String> keys;
   /*! \brief Options for this target */
   Array<String> options_array;
   /*! \brief Collection of imported libs */
@@ -60,7 +60,7 @@ class TargetNode : public Object {
 
   void VisitAttrs(AttrVisitor* v) {
     v->Visit("id", &id);
-    v->Visit("keys_array", &keys_array);
+    v->Visit("keys_", &keys);
     v->Visit("options_array", &options_array);
     v->Visit("libs_array", &libs_array);
     v->Visit("attrs", &attrs);
@@ -86,7 +86,7 @@ class TargetNode : public Object {
   }
 
   /*! \brief Get the keys for this target as a vector of string */
-  TVM_DLL std::vector<std::string> keys() const;
+  TVM_DLL std::vector<std::string> GetKeys() const;
 
   /*! \brief Get the options for this target as a vector of string */
   TVM_DLL std::vector<std::string> options() const;

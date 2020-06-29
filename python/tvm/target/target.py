@@ -55,7 +55,7 @@ class Target(Object):
     @property
     def keys(self):
         if not self._keys:
-            self._keys = [str(k) for k in self.keys_array]
+            self._keys = [str(k) for k in self.keys_]
         return self._keys
 
     @property
