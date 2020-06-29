@@ -274,38 +274,18 @@ bool StartsWith(const std::string& str, const std::string& pattern) {
   return str.compare(0, pattern.length(), pattern) == 0;
 }
 
-std::string GetDeviceName(const std::string& target_str) {
-  std::istringstream ss(target_str);
-  std::string name;
-  ss >> name;
-
-  std::string item;
-  while (ss >> item) {
-    if (StartsWith(item, "-device=")) {
-      return item.substr(std::string("-device=").length());
-    }
-  }
-
-  return "";
-}
-
 Target Target::Create(const std::string& target_str) {
   if (target_str.length() == 0) {
     LOG(FATAL) << "target_str must not be empty";
   }
-
   std::istringstream ss(target_str);
   std::string name;
-
   ss >> name;
-  auto device_name = GetDeviceName(target_str);
-
   std::vector<std::string> options;
   std::string item;
   while (ss >> item) {
     options.push_back(item);
   }
-
   return CreateTarget(name, options);
 }
 
