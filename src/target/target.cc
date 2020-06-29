@@ -171,57 +171,25 @@ TVM_STATIC_IR_FUNCTOR(ReprPrinter, vtable)
 Target CreateTarget(const std::string& name, const std::vector<std::string>& options) {
   Target _t = Target::NewCreateTarget(name, options);
   TargetNode* t = const_cast<TargetNode*>(_t.as<TargetNode>());
-  std::string device_name = t->GetAttr<String>("device", "").value();
-  std::vector<String> keys;
-  const std::string kKeysFlag = "-keys=";
-  for (auto& item : options) {
-    if (item.find(kKeysFlag) == 0) {
-      std::stringstream ss(item.substr(kKeysFlag.length()));
-      std::string key_item;
-      while (std::getline(ss, key_item, ',')) {
-        keys.push_back(key_item);
-      }
+  String device_name = t->GetAttr<String>("device", "").value();
+  // set up `thread_warp_size`
+  if (name == "opencl" && device_name == "intel_graphics") {
+    t->attrs.Set("thread_warp_size", Integer(16));
+  }
+  // set up keys
+  Array<String> keys = _t->id->default_keys;
+  {
+    // add `device_name`
+    if (!device_name.empty()) {
+      keys.push_back(device_name);
+    }
+    // add specified keys
+    std::istringstream is(t->GetAttr<String>("keys", "").value());
+    for (std::string item; std::getline(is, item, ','); ) {
+      keys.push_back(item);
     }
   }
-  if (device_name.length() > 0) {
-    keys.push_back(device_name);
-  }
-  if (name == "c" && device_name == "micro_dev") {
-    // FIXME
-  } else if (name == "c" || name == "llvm") {
-    keys.push_back("cpu");
-  } else if (name == "cuda" || name == "nvptx") {
-    keys.push_back("cuda");
-    keys.push_back("gpu");
-  } else if (name == "rocm" || name == "opencl") {
-    // For now assume rocm schedule for opencl
-    keys.push_back(name);
-    keys.push_back("gpu");
-    if (device_name == "intel_graphics") {
-      t->attrs.Set("thread_warp_size", Integer(16));
-    }
-  } else if (name == "metal" || name == "vulkan" || name == "webgpu") {
-    keys.push_back(name);
-    keys.push_back("gpu");
-  } else if (name == "sdaccel") {
-    keys.push_back("sdaccel");
-    keys.push_back("hls");
-  } else if (name == "aocl" || name == "aocl_sw_emu") {
-    keys.push_back("aocl");
-    keys.push_back("hls");
-  } else if (name == "stackvm") {
-  } else if (name == "ext_dev") {
-  } else if (name == "hybrid") {
-  } else if (name == "hexagon") {
-    keys.push_back("hexagon");
-  } else if (name == "webgpu") {
-    keys.push_back("webgpu");
-  } else {
-    LOG(ERROR) << "Unknown target name " << name << "; falling back to stackvm";
-    return target::stackvm();
-  }
-  t->attrs.Set("device_name", String(device_name));
-  t->keys = keys;
+  t->keys = std::move(keys);
   return _t;
 }
 

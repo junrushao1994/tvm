@@ -89,7 +89,7 @@ class Target(Object):
 
     @property
     def device_name(self):
-        return self.attrs.get("device_name", "")
+        return self.attrs.get("device", "")
 
     @property
     def model(self):
