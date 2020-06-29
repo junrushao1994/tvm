@@ -107,7 +107,6 @@ class Target : public ObjectRef {
    * \param target_str the string to parse
    */
   TVM_DLL static Target Create(const std::string& target_str);
-  TVM_DLL static Target NewCreate(const std::string& target_str);
   TVM_DLL static Target NewCreateTarget(const std::string& name,
                                         const std::vector<std::string>& options);
   /*!

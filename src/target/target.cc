@@ -140,7 +140,7 @@ Target Target::NewCreateTarget(const std::string& name, const std::vector<std::s
   target->str_repr_ = str_repr.str();
   return Target(target);
 }
-
+/*
 Target Target::NewCreate(const std::string& target_str) {
   std::vector<std::string> splits;
   std::istringstream is(target_str);
@@ -151,7 +151,7 @@ Target Target::NewCreate(const std::string& target_str) {
                     << "\"";
   return NewCreateTarget(splits[0], {splits.begin() + 1, splits.end()});
 }
-
+*/
 TVM_REGISTER_NODE_TYPE(TargetNode);
 
 TVM_STATIC_IR_FUNCTOR(ReprPrinter, vtable)
@@ -171,16 +171,12 @@ TVM_STATIC_IR_FUNCTOR(ReprPrinter, vtable)
 Target CreateTarget(const std::string& name, const std::vector<std::string>& options) {
   Target _t = Target::NewCreateTarget(name, options);
   TargetNode* t = const_cast<TargetNode*>(_t.as<TargetNode>());
-  std::string device_flag = "-device=";
-  std::string keys_flag = "-keys=";
-  std::string device_name;
+  std::string device_name = t->GetAttr<String>("device", "").value();
   std::vector<String> keys;
+  const std::string kKeysFlag = "-keys=";
   for (auto& item : options) {
-    if (item.find(device_flag) == 0) {
-      device_name = item.substr(device_flag.length());
-      keys.push_back(device_name);
-    } else if (item.find(keys_flag) == 0) {
-      std::stringstream ss(item.substr(keys_flag.length()));
+    if (item.find(kKeysFlag) == 0) {
+      std::stringstream ss(item.substr(kKeysFlag.length()));
       std::string key_item;
       while (std::getline(ss, key_item, ',')) {
         keys.push_back(key_item);

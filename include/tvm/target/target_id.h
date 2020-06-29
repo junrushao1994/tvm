@@ -58,6 +58,8 @@ class TargetIdNode : public Object {
   String name;
   /*! \brief Device type of target id */
   int device_type;
+  /*! \brief Default keys of the target */
+  Array<String> default_keys;
   /*! \brief Stores the required type_key and type_index of a specific attr of a target */
   struct ValueTypeInfo {
     String type_key;
@@ -65,7 +67,12 @@ class TargetIdNode : public Object {
     std::unique_ptr<ValueTypeInfo> key;
     std::unique_ptr<ValueTypeInfo> val;
   };
-  void VisitAttrs(AttrVisitor* v) { v->Visit("name", &name); }
+
+  void VisitAttrs(AttrVisitor* v) {
+    v->Visit("name", &name);
+    v->Visit("device_type", &device_type);
+    v->Visit("default_keys", &default_keys);
+  }
 
   static constexpr const char* _type_key = "TargetId";
   TVM_DECLARE_FINAL_OBJECT_INFO(TargetIdNode, Object);
@@ -163,6 +170,11 @@ class TargetIdRegEntry {
    * \param device_type Device type
    */
   inline TargetIdRegEntry& set_device_type(int device_type);
+  /*!
+   * \brief Set DLPack's device_type the target
+   * \param device_type Device type
+   */
+  inline TargetIdRegEntry& set_default_keys(std::vector<String> keys);
   /*!
    * \brief Register a valid configuration option and its ValueType for validation
    * \param key The configuration key
@@ -311,6 +323,11 @@ inline TargetIdRegEntry& TargetIdRegEntry::set_attr(const String& attr_name, con
 
 inline TargetIdRegEntry& TargetIdRegEntry::set_device_type(int device_type) {
   id_->device_type = device_type;
+  return *this;
+}
+
+inline TargetIdRegEntry& TargetIdRegEntry::set_default_keys(std::vector<String> keys) {
+  id_->default_keys = keys;
   return *this;
 }
 
