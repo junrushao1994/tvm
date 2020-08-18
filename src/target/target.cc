@@ -537,10 +537,12 @@ TVM_REGISTER_GLOBAL("target.GetCurrentTarget").set_body_typed(Target::Current);
 
 TVM_REGISTER_GLOBAL("target.TargetFromString").set_body_typed(Target::Create);
 
+TVM_REGISTER_GLOBAL("target.FromConfig").set_body_typed(Target::FromConfig);
+
 TVM_STATIC_IR_FUNCTOR(ReprPrinter, vtable)
     .set_dispatch<TargetNode>([](const ObjectRef& node, ReprPrinter* p) {
       auto* op = static_cast<const TargetNode*>(node.get());
-      p->stream << op->str();
+      p->stream << op->AsDict();
     });
 
 namespace target {

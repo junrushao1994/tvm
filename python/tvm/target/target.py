@@ -17,6 +17,7 @@
 """Target data structure."""
 import os
 import re
+import json
 import warnings
 import tvm._ffi
 
@@ -67,6 +68,10 @@ class Target(Object):
         ValueError if current target is not set.
         """
         return _ffi_api.GetCurrentTarget(allow_none)
+
+    @staticmethod
+    def from_config(config):
+        return _ffi_api.FromConfig(config)
 
     @property
     def max_num_threads(self):
@@ -354,5 +359,7 @@ def create(target_str):
         return target_str
     if not isinstance(target_str, str):
         raise ValueError("target_str has to be string type")
-
+    if target_str.startswith('{'):
+        target_str = json.loads(target_str)
+        return Target.from_config(target_str)
     return _ffi_api.TargetFromString(target_str)

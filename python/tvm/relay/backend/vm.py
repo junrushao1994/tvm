@@ -183,12 +183,13 @@ class VMCompiler(object):
             raise ValueError("Target is not set in env or passed as argument.")
         tgts = {}
         if isinstance(target, (str, tvm.target.Target)):
-            dev_type = tvm.tir.IntImm("int32", tvm.nd.context(str(target)).device_type)
-            tgts[dev_type] = tvm.target.create(target)
+            tgt = tvm.target.create(target)
+            dev_type = tvm.tir.IntImm("int32", tvm.nd.context(tgt.kind.name).device_type)
+            tgts[dev_type] = tgt
         elif isinstance(target, dict):
             for dev, tgt in target.items():
-                dev_type = tvm.tir.IntImm("int32", tvm.nd.context(dev).device_type)
                 tgts[dev_type] = tvm.target.create(tgt)
+                dev_type = tvm.tir.IntImm("int32", tvm.nd.context(dev).device_type)
         else:
             raise TypeError("target is expected to be str, tvm.target.Target, " +
                             "or dict of str to str/tvm.target.Target, but received " +
