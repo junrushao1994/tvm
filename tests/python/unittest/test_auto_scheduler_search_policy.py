@@ -43,13 +43,13 @@ def search_common(workload=matmul_auto_scheduler_test, target="llvm",
         search_policy = auto_scheduler.EmptyPolicy(task)
     elif search_policy == 'sketch':
         search_policy = auto_scheduler.SketchPolicy(task,
-                init_search_callbacks=init_search_callbacks)
+                                                    init_search_callbacks=init_search_callbacks)
 
     with tempfile.NamedTemporaryFile() as fp:
         log_file = fp.name
 
         tuning_options = auto_scheduler.TuningOptions(num_measure_trials=num_measure_trials,
-                runner=runner, verbose=1, measure_callbacks=[auto_scheduler.RecordToFile(log_file)])
+                                                      runner=runner, verbose=1, measure_callbacks=[auto_scheduler.RecordToFile(log_file)])
         sch, args = auto_scheduler.auto_schedule(task, search_policy, tuning_options)
         inp, res = auto_scheduler.load_best(log_file, workload_key, target)
 
@@ -61,7 +61,7 @@ def search_common(workload=matmul_auto_scheduler_test, target="llvm",
             print(tvm.lower(sch, args, simple_mode=True))
             mod = tvm.build(sch, args, target)
 
-            ctx = tvm.context(str(target), 0)
+            ctx = tvm.context(target.kind.name, 0)
             dtype = dag.tensors[0].dtype
             a = tvm.nd.array(np.random.uniform(size=(N, N)).astype(dtype), ctx)
             b = tvm.nd.array(np.random.uniform(size=(N, N)).astype(dtype), ctx)

@@ -361,7 +361,7 @@ class MeasureErrorNo(object):
     INSTANTIATION_ERROR = 1   # Errors happen when apply transform steps from init state
     COMPILE_HOST = 2          # Errors happen when compiling code on host (e.g., tvm.build)
     COMPILE_DEVICE = 3        # Errors happen when compiling code on device
-                              # (e.g. OpenCL JIT on the device)
+    # (e.g. OpenCL JIT on the device)
     RUNTIME_DEVICE = 4        # Errors happen when run program on device
     WRONG_ANSWER = 5          # Answer is wrong when compared to a reference output
     BUILD_TIMEOUT = 6         # Timeout during compilation
@@ -552,7 +552,7 @@ def local_run(inputs, build_results,
         error_msg = None
         try:
             func = module.load_module(build_res.filename)
-            ctx = ndarray.context(str(inp.task.target), 0)
+            ctx = ndarray.context(inp.task.target.kind.name, 0)
             # TODO(FrozenGene): Add cpu cache flush to this function.
             time_f = func.time_evaluator(
                 func.entry_name, ctx, number=number, repeat=repeat, min_repeat_ms=min_repeat_ms)
@@ -643,7 +643,7 @@ def rpc_run_worker(index):
             remote = request_remote(key, host, port, priority, timeout)
             remote.upload(build_res.filename)
             func = remote.load_module(os.path.split(build_res.filename)[1])
-            ctx = remote.context(str(inp.task.target), 0)
+            ctx = remote.context(inp.task.target.kind.name, 0)
             # TODO(FrozenGene): Add cpu cache flush to this function.
             time_f = func.time_evaluator(
                 func.entry_name, ctx, number=number, repeat=repeat, min_repeat_ms=min_repeat_ms)

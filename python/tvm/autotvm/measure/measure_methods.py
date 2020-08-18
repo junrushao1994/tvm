@@ -240,7 +240,7 @@ class RPCRunner(Runner):
         if 'cuda' in self.task.target.keys or 'opencl' in self.task.target.keys or \
            'rocm' in self.task.target.keys or 'vulkan' in self.task.target.keys:
             remote = request_remote(self.key, self.host, self.port)
-            ctx = remote.context(str(self.task.target), 0)
+            ctx = remote.context(self.task.target.kind.name, 0)
             max_dims = ctx.max_thread_dimensions
             kwargs['check_gpu'] = {
                 'max_shared_memory_per_block': ctx.max_shared_memory_per_block,
@@ -380,7 +380,7 @@ def _build_func_common(measure_input, check_gpu=None, cuda_arch=None, build_opti
 
         # if target is vta, we need to use vta build
         if hasattr(measure_input.target, 'device_name') and \
-            measure_input.target.device_name == 'vta':
+                measure_input.target.device_name == 'vta':
             # pylint: disable=import-outside-toplevel
             import vta
             func = vta.build(s, args, target_host=task.target_host)
@@ -488,14 +488,14 @@ def run_through_rpc(measure_input, build_result,
         remote = request_remote(*remote_args)
         # Program the FPGA every single time when targeting VTA
         if hasattr(measure_input.target, 'device_name') and \
-            measure_input.target.device_name == 'vta':
+                measure_input.target.device_name == 'vta':
             # pylint: disable=import-outside-toplevel
             from vta import program_fpga, reconfig_runtime
             program_fpga(remote, None)
             reconfig_runtime(remote)
         remote.upload(build_result.filename)
         func = remote.load_module(os.path.split(build_result.filename)[1])
-        ctx = remote.context(str(measure_input.target), 0)
+        ctx = remote.context(measure_input.target.kind.name, 0)
 
         # Limitation:
         # We can not get PackFunction directly in the remote mode as it is wrapped
@@ -608,7 +608,7 @@ def check_remote(target, device_key, host=None, port=None, priority=100, timeout
     """
     def _check():
         remote = request_remote(device_key, host, port, priority)
-        ctx = remote.context(str(target))
+        ctx = remote.context(target.kind.name)
         while not ctx.exist:  # wait until we get an available device
             pass
     t = threading.Thread(target=_check,)

@@ -276,6 +276,18 @@ std::unordered_set<std::string> TargetNode::GetLibs() const {
   return result;
 }
 
+Map<String, ObjectRef> TargetNode::AsDict() const {
+  Map<String, ObjectRef> result = {
+      {"kind", this->kind->name},
+      {"tag", this->tag},
+      {"keys", this->keys},
+  };
+  for (const auto& kv : attrs) {
+    result.Set(kv.first, kv.second);
+  }
+  return result;
+}
+
 const std::string& TargetNode::str() const {
   if (str_repr_.empty()) {
     std::ostringstream os;
