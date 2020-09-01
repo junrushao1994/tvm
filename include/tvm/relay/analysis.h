@@ -246,6 +246,26 @@ TVM_DLL Array<Pattern> UnmatchedCases(const Match& match, const IRModule& mod);
 TVM_DLL std::unordered_map<const Object*, size_t> GetExprRefCount(const Expr& body);
 
 /*!
+ * \brief For each variable, count the number of times it appears in the Expr.
+ * In Relay, each Var should be used exactly once to make sure the span information is recorded
+ * correctly. Identity of variables are instead indicated via its vid, i.e. variable are the same
+ * <=> their vid are the same.
+ * \param body The body expression.
+ * \return The reference count mapping.
+ * TODO(@junrushao1994): a better function name.
+ */
+TVM_DLL Map<Var, Integer> CountVarAppearance(const Expr& body);
+
+/*!
+ * \brief Check if all variables in the expr point to distinct addresses.
+ * \param body The body expression.
+ * \return A boolean indicating if the variables are distinct.
+ * \sa CountVarAppearance
+ * TODO(@junrushao1994): a better function name.
+ */
+TVM_DLL bool AllVarsDistinct(const Expr& body);
+
+/*!
  * \brief Get the updated module for collecting calibration data.
  *
  * \param mod The module to be updated.
