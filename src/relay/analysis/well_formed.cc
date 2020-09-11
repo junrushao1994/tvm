@@ -124,7 +124,12 @@ class WellFormedChecker : private ExprVisitor, PatternVisitor {
   }
 };
 
-bool WellFormed(const Expr& e) { return WellFormedChecker().CheckWellFormed(e); }
+bool WellFormed(const Expr& e) {
+  if (!AllVarsDistinct(e)) {
+    LOG(WARNING) << "In well_formed.cc: Failed check `AllVarsDistinct`";
+  }
+  return WellFormedChecker().CheckWellFormed(e);
+}
 
 TVM_REGISTER_GLOBAL("relay.analysis.well_formed").set_body_typed(WellFormed);
 

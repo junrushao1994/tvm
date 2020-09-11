@@ -187,7 +187,12 @@ class MacCounter : private ExprVisitor {
   int64_t count_;
 };
 
-int64_t GetTotalMacNumber(const Expr& expr) { return MacCounter::GetTotalMacNumber(expr); }
+int64_t GetTotalMacNumber(const Expr& expr) {
+  if (!AllVarsDistinct(expr)) {
+    LOG(WARNING) << "In feature.cc: Failed check `AllVarsDistinct`";
+  }
+  return MacCounter::GetTotalMacNumber(expr);
+}
 
 TVM_REGISTER_GLOBAL("relay.analysis.GetTotalMacNumber").set_body_typed(GetTotalMacNumber);
 

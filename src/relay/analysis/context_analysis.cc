@@ -695,6 +695,9 @@ AnalysisResultMap ContextAnalysis(const IRModule& mod, const TVMContext& default
   auto entry = mod->GetGlobalVar("main");
   auto ca = analysis::ContextAnalyzer(mod, entry, default_context);
   auto expr = mod->Lookup(entry);
+  if (!AllVarsDistinct(expr)) {
+    LOG(WARNING) << "In context_analysis.cc: Failed check `AllVarsDistinct`";
+  }
   ca.VisitExpr(expr);
   return ca.Results();
 }

@@ -183,6 +183,9 @@ Map<GlobalVar, Array<Integer>> GetCalibrateOutputMap(const IRModule& module) {
       if (pair.first->name_hint == "main") {
         OutputMapper output_mapper(&output_map, module, &offset);
         auto func = GetRef<Function>(fn);
+        if (!AllVarsDistinct(func)) {
+          LOG(WARNING) << "In feature.cc: Failed check `AllVarsDistinct`";
+        }
         PostOrderRewrite(func->body, &output_mapper);
       }
     }

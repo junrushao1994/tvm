@@ -181,6 +181,9 @@ class DependencyGraph::Creator : private ExprFunctor<void(const Expr& e)> {
 };
 
 DependencyGraph DependencyGraph::Create(support::Arena* arena, const Expr& body) {
+  if (!AllVarsDistinct(body)) {
+    LOG(WARNING) << "In dependency_graph.cc: Failed check `AllVarsDistinct`";
+  }
   return Creator(arena).Create(body);
 }
 

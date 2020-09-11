@@ -138,6 +138,9 @@ Array<Integer> PyDetectFeature(const Expr& expr, const Optional<IRModule>& mod) 
 TVM_REGISTER_GLOBAL("relay.analysis.detect_feature").set_body_typed(PyDetectFeature);
 
 void CheckFeature(const Expr& expr, const FeatureSet& fs) {
+  if (!AllVarsDistinct(expr)) {
+    LOG(WARNING) << "In feature.cc: Failed check `AllVarsDistinct`";
+  }
   auto dfs = DetectFeature(expr);
   CHECK(dfs.is_subset_of(fs)) << AsText(expr, false)
                               << "\nhas unsupported feature: " << (dfs - fs).ToString();

@@ -216,6 +216,9 @@ class AnnotatedRegionSet::Creator : protected MixedModeVisitor {
 };
 
 AnnotatedRegionSet AnnotatedRegionSet::Create(const Expr& expr, const Op& begin, const Op& end) {
+  if (!AllVarsDistinct(expr)) {
+    LOG(WARNING) << "In annotated_region_set.cc: Failed check `AllVarsDistinct`";
+  }
   return Creator(begin, end).Create(expr);
 }
 
