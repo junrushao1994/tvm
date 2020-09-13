@@ -162,7 +162,7 @@ def @concat[A](%xs: List[A], %ys: List[A]) -> List[A] {
 }
 
 /*
- * Filters a list, returning a sublist of only the values which satisfy the given predicate.
+ * Filters a list, returning a sub-list of only the values which satisfy the given predicate.
  */
 def @filter[A](%f: fn(A) -> Tensor[(), bool], %xs: List[A]) -> List[A] {
   match (%xs) {
@@ -197,7 +197,7 @@ def @rev[A](%xs: List[A]) -> List[A] {
 }
 
 /*
- * An accumulative map, which is a fold that simulataneously updates an
+ * An accumulative map, which is a fold that simultaneously updates an
  * accumulator value and a list of results.
  *
  * This map proceeds through the list from right to left.
@@ -211,7 +211,7 @@ def @map_accumr[A, B, C](%f: fn(A, B) -> (A, C), %init: A, %xs: List[B]) -> (A, 
 }
 
 /*
- * an accumulative map, which is a fold that simulataneously updates an
+ * an accumulative map, which is a fold that simultaneously updates an
  * accumulator value and a list of results.
  *
  * This map proceeds through the list from left to right.
@@ -268,7 +268,7 @@ type Tree[A] {
 }
 
 /*
- * Maps over a tree. The function is applied to each subtree's contents.
+ * Maps over a tree. The function is applied to each sub-tree's contents.
  */
 def @tmap[A, B](%f: fn(A) -> B, %t: Tree[A]) -> Tree[B] {
   match(%t) {
