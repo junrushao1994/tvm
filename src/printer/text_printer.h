@@ -169,6 +169,8 @@ class RelayTextPrinter : public ExprFunctor<Doc(const Expr&)>,
   runtime::TypedPackedFunc<std::string(ObjectRef)> annotate_;
   /*! \brief Stack of docs to implement scoped GNFing. */
   std::vector<Doc> doc_stack_{};
+  /*! \brief Allocated relay variables */
+  std::unordered_map<Id, Var, ObjectPtrHash, ObjectPtrEqual> alloc_vars_;
   /*! \brief Map from Expr to Doc */
   std::unordered_map<Expr, Doc, ObjectPtrHash, ObjectPtrEqual> memo_;
   /*! \brief Map from Type to Doc */

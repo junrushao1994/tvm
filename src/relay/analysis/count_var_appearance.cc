@@ -23,11 +23,12 @@
  */
 
 #include <tvm/relay/expr_functor.h>
+#include <tvm/relay/pattern_functor.h>
 
 namespace tvm {
 namespace relay {
 
-class VarAppearanceCounter final : public ExprVisitor {
+class VarAppearanceCounter final : public ExprVisitor, public PatternVisitor {
  public:
   void VisitExpr(const Expr& expr) override {
     if (const auto* var = expr.as<VarNode>()) {

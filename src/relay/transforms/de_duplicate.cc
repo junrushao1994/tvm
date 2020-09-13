@@ -43,11 +43,8 @@ Expr DeDup(const Expr& e) {
     }
 
     Var Fresh(const Var& v) {
-      CHECK_EQ(rename_.count(v), 0);
-      CHECK_EQ(memo_.count(v), 0) << v.as<VarNode>();
-      Var ret = Var(v->name_hint(), VisitType(v->type_annotation));
-      rename_[v] = ret;
-      return ret;
+      CHECK_EQ(rename_.count(v->vid), 0);
+      return rename_[v->vid] = Var(Id(v->vid->name_hint), VisitType(v->type_annotation), v->span);
     }
 
     Expr VisitExpr(const Expr& e) final {
@@ -58,7 +55,11 @@ Expr DeDup(const Expr& e) {
 
     Expr VisitExpr_(const VarNode* op) final {
       Var v = GetRef<Var>(op);
-      return rename_.count(v) != 0 ? rename_.at(v) : v;
+      if (rename_.count(v->vid) == 0) {
+        return std::move(v);
+      }
+      Var u = rename_.at(v->vid);
+      return Var(u->vid, u->type_annotation, v->span);
     }
 
     Expr VisitExpr_(const LetNode* op) final {
@@ -89,14 +90,15 @@ Expr DeDup(const Expr& e) {
       return type_rename_.count(v) != 0 ? type_rename_.at(v) : v;
     }
 
-    Var VisitVar(const Var& v) final { return Fresh(v); }
-
    private:
-    std::unordered_map<Var, Var, ObjectPtrHash, ObjectPtrEqual> rename_;
+    std::unordered_map<Id, Var, ObjectPtrHash, ObjectPtrEqual> rename_;
     std::unordered_map<TypeVar, TypeVar, ObjectPtrHash, ObjectPtrEqual> type_rename_;
   };
   CHECK(WellFormed(e)) << AsText(e, false);
   Expr ret = DeDupMutator().VisitExpr(e);
+  if (!AllVarsDistinct(ret)) {
+    LOG(WARNING) << "Failed check `AllVarsDistinct`";
+  }
   CHECK(WellFormed(ret));
   CHECK_EQ(FreeVars(e).size(), FreeVars(ret).size());
   return ret;

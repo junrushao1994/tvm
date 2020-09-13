@@ -22,6 +22,7 @@
  */
 #include <tvm/relay/analysis.h>
 #include <tvm/relay/expr_functor.h>
+#include <tvm/relay/pattern_functor.h>
 #include <tvm/relay/transform.h>
 
 #include "pattern_util.h"
@@ -29,7 +30,7 @@
 namespace tvm {
 namespace relay {
 
-class VarToIdMutator final : public ExprMutator {
+class VarToIdMutator final : public ExprMutator, public PatternMutator {
  public:
   using TIdMap = std::unordered_map<Var, Id, ObjectPtrHash, ObjectPtrEqual>;
 
@@ -43,6 +44,15 @@ class VarToIdMutator final : public ExprMutator {
     }
   }
 
+  Pattern VisitPattern(const Pattern& p) final { return PatternFunctor::VisitPattern(p); }
+
+  Pattern VisitPattern_(const PatternVarNode* pattern_var) override {
+    const Var& var = pattern_var->var;
+    PatternVar result(Var(id_map.at(var), var->type_annotation, var->span));
+    result->span = pattern_var->span;
+    return std::move(result);
+  }
+
   const TIdMap& id_map;
 };
 
@@ -50,10 +60,10 @@ Expr VarToId(const Expr& e) {
   Map<Var, Integer> counter = CountVarAppearance(e);
   VarToIdMutator::TIdMap id_map;
   for (const auto& kv : counter) {
-    Var var = kv.first;
+    const Var& var = kv.first;
     id_map[var] = Id(var->vid->name_hint);
   }
-  return VarToIdMutator(id_map).Mutate(e);
+  return VarToIdMutator(id_map).VisitExpr(e);
 }
 
 namespace transform {

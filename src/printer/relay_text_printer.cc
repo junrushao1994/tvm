@@ -202,22 +202,24 @@ Doc RelayTextPrinter::AllocTypeVar(const TypeVar& var) {
  * \param var The input variable.
  * \return The corresponding name.
  */
-Doc RelayTextPrinter::AllocVar(const Var& var) {
+Doc RelayTextPrinter::AllocVar(const Var& _var) {
   // still print if ir is malformed, but show the error.
-  if (memo_.count(var)) {
-    Doc val = memo_[var];
+  const Id& id = _var->vid;
+  if (alloc_vars_.count(id)) {
+    Doc val = memo_[alloc_vars_.at(id)];
     val << "-malformed-ir";
     return val;
   }
-  std::string name = var->name_hint();
+  std::string name = id->name_hint;
   // always make sure first name is alpha
   if (name.length() == 0 || !std::isalpha(name[0])) {
     name = "v" + name;
   }
   Doc val = GetUniqueName("%" + name);
-  memo_[var] = val;
-  if (var->type_annotation.defined()) {
-    val << ": " << Print(var->type_annotation);
+  alloc_vars_[id] = _var;
+  memo_[_var] = val;
+  if (_var->type_annotation.defined()) {
+    val << ": " << Print(_var->type_annotation);
   }
   return val;
 }
@@ -255,6 +257,12 @@ Doc RelayTextPrinter::PrintExpr(const Expr& expr, bool meta, bool try_inline, bo
   auto it = memo_.find(expr);
   if (it != memo_.end()) return it->second;
 
+  if (const auto* var = expr.as<VarNode>()) {
+    if (alloc_vars_.count(var->vid)) {
+      return memo_.at(alloc_vars_.at(var->vid));
+    }
+  }
+
   Doc printed_expr;
 
   if (meta) {
@@ -274,7 +282,7 @@ Doc RelayTextPrinter::PrintExpr(const Expr& expr, bool meta, bool try_inline, bo
   }
 
   // add expr to doc
-  if (expr.as<VarNode>()) {
+  if (expr->IsInstance<VarNode>()) {
     // This is our first time visiting the var and we hit the VarNode case
     // in the visitor. Thus the variable is free.
     doc_stack_.back() << "free_var " << printed_expr << ";" << Doc::NewLine();
