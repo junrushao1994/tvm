@@ -185,7 +185,7 @@ tvm::Array<T> concat(const tvm::Array<T>& l, const tvm::Array<T>& r) {
 
 // helper function to run type check
 relay::Function RunTypeCheck(const IRModule& mod, const GlobalVar& var, relay::Function f) {
-  auto func = Downcast<relay::Function>(relay::DeDup(std::move(f)));
+  auto func = Downcast<relay::Function>(relay::DeDup(relay::VarToId(std::move(f))));
   // Type check the item before we add it to the module.
   auto fv = relay::FreeVars(func);
   auto ftv = relay::FreeTypeVars(func, mod);

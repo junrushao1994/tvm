@@ -35,8 +35,12 @@ class VarToIdMutator final : public ExprMutator {
 
   explicit VarToIdMutator(const TIdMap& id_map) : id_map(id_map) {}
 
-  Expr VisitExpr_(const VarNode* var) override {
-    return Var(id_map.at(GetRef<Var>(var)), var->type_annotation, {});
+  Expr VisitExpr(const Expr& expr) override {
+    if (const auto* var = expr.as<VarNode>()) {
+      return Var(id_map.at(GetRef<Var>(var)), var->type_annotation, expr->span);
+    } else {
+      return ExprMutator::VisitExpr(expr);
+    }
   }
 
   const TIdMap& id_map;

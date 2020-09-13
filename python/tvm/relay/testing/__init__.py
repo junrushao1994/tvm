@@ -59,7 +59,10 @@ def run_opt_pass(expr, opt_pass, import_prelude=False):
 
 
 def run_infer_type(expr):
-    return run_opt_pass(expr, relay.transform.InferType())
+    return run_opt_pass(expr, tvm.transform.Sequential(passes=[
+        relay.transform.VarToId(),
+        relay.transform.InferType(),
+    ]))
 
 
 def _np_randn_from_type(t, scale=1, mean=0):

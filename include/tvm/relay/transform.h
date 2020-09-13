@@ -502,6 +502,8 @@ TVM_DLL Function UnCPS(const Function& f);
  */
 TVM_DLL Expr DeDup(const Expr& e);
 
+TVM_DLL Expr VarToId(const Expr& e);
+
 }  // namespace relay
 }  // namespace tvm
 

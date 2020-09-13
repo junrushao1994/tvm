@@ -29,7 +29,12 @@ namespace relay {
 
 class VarAppearanceCounter final : public ExprVisitor {
  public:
-  void VisitExpr_(const VarNode* var) override { ++counter[var]; }
+  void VisitExpr(const Expr& expr) override {
+    if (const auto* var = expr.as<VarNode>()) {
+      ++counter[var];
+    }
+    ExprVisitor::VisitExpr(expr);
+  }
 
   Map<Var, Integer> Run(const Expr& expr) {
     VisitExpr(expr);

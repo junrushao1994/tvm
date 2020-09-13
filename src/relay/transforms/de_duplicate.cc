@@ -31,6 +31,9 @@ namespace tvm {
 namespace relay {
 
 Expr DeDup(const Expr& e) {
+  if (!AllVarsDistinct(e)) {
+    LOG(WARNING) << "Failed check `AllVarsDistinct`";
+  }
   class DeDupMutator : public TypeMutator, public ExprMutator, public PatternMutator {
    public:
     TypeVar Fresh(const TypeVar& tv) {

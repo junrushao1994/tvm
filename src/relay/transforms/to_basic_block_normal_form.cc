@@ -76,6 +76,9 @@ bool BasicBlockNormalFormCheck(const Expr& e) {
   support::Arena arena;
   DependencyGraph dg = DependencyGraph::Create(&arena, e);
   std::pair<NodeScopeMap, ExprSet> scopes = CalcScope(dg);
+  if (!AllVarsDistinct(e)) {
+    LOG(WARNING) << "In `to_basic_block_normal_form.cc`: AllVarsDistinct is violated";
+  }
   for (auto expr : scopes.second) {
     LOG(FATAL) << "The expression below violates the basic block normal form in that "
                << "its scope should be lifted:\n"
