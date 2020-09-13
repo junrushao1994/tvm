@@ -37,6 +37,10 @@ class VarAppearanceCounter final : public ExprVisitor, public PatternVisitor {
     ExprVisitor::VisitExpr(expr);
   }
 
+  void VisitPattern(const Pattern& p) override { return PatternVisitor::VisitPattern(p); }
+
+  void VisitPattern_(const PatternVarNode* pattern_var) override { VisitExpr(pattern_var->var); }
+
   Map<Var, Integer> Run(const Expr& expr) {
     VisitExpr(expr);
     Map<Var, Integer> result;

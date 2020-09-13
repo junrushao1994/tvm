@@ -44,7 +44,7 @@ class VarToIdMutator final : public ExprMutator, public PatternMutator {
     }
   }
 
-  Pattern VisitPattern(const Pattern& p) final { return PatternFunctor::VisitPattern(p); }
+  Pattern VisitPattern(const Pattern& p) final { return PatternMutator::VisitPattern(p); }
 
   Pattern VisitPattern_(const PatternVarNode* pattern_var) override {
     const Var& var = pattern_var->var;
@@ -58,6 +58,17 @@ class VarToIdMutator final : public ExprMutator, public PatternMutator {
 
 Expr VarToId(const Expr& e) {
   Map<Var, Integer> counter = CountVarAppearance(e);
+  bool all_unique = true;
+  for (const auto& kv : counter) {
+    int cnt = kv.second;
+    if (cnt > 1) {
+      all_unique = false;
+      break;
+    }
+  }
+  if (all_unique) {
+    return e;
+  }
   VarToIdMutator::TIdMap id_map;
   for (const auto& kv : counter) {
     const Var& var = kv.first;
