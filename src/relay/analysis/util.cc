@@ -164,9 +164,13 @@ class VarVisitor : protected ExprVisitor, protected PatternVisitor {
   Array<Var> Free(const Expr& expr) {
     this->VisitExpr(expr);
     Array<Var> ret;
-    for (const auto& v : vars_.data) {
-      if (bound_vars_.set.count(v) == 0) {
-        ret.push_back(v);
+    for (const auto& id : var_ids_.data) {
+      if (bound_var_ids_.set.count(id) == 0) {
+        if (var_types_.count(id)) {
+          ret.push_back(Var(id, var_types_[id], {}));
+        } else {
+          ret.push_back(Var(id, {}, {}));
+        }
       }
     }
     return ret;
@@ -174,8 +178,12 @@ class VarVisitor : protected ExprVisitor, protected PatternVisitor {
 
   Array<Var> Collect() {
     Array<Var> ret;
-    for (const auto& v : bound_vars_.data) {
-      ret.push_back(v);
+    for (const auto& id : bound_var_ids_.data) {
+      if (var_types_.count(id)) {
+        ret.push_back(Var(id, var_types_[id], {}));
+      } else {
+        ret.push_back(Var(id, {}, {}));
+      }
     }
     return ret;
   }
@@ -193,18 +201,32 @@ class VarVisitor : protected ExprVisitor, protected PatternVisitor {
   Array<Var> All(const Expr& expr) {
     this->VisitExpr(expr);
     Array<Var> ret;
-    for (const auto& v : vars_.data) {
-      ret.push_back(v);
+    for (const auto& id : var_ids_.data) {
+      if (var_types_.count(id)) {
+        ret.push_back(Var(id, var_types_[id], {}));
+      } else {
+        ret.push_back(Var(id, {}, {}));
+      }
     }
     return ret;
   }
 
   void MarkBounded(const Var& v) {
-    bound_vars_.Insert(v);
-    vars_.Insert(v);
+    MarkVar(v);
+    bound_var_ids_.Insert(v->vid);
+    if (!var_types_.count(v->vid) && v->type_annotation.defined()) {
+      var_types_[v->vid] = v->type_annotation;
+    }
   }
 
-  void VisitExpr_(const VarNode* var) final { vars_.Insert(GetRef<Var>(var)); }
+  void MarkVar(const Var& v) {
+    var_ids_.Insert(v->vid);
+    if (!var_types_.count(v->vid) && v->type_annotation.defined()) {
+      var_types_[v->vid] = v->type_annotation;
+    }
+  }
+
+  void VisitExpr_(const VarNode* var) final { MarkVar(GetRef<Var>(var)); }
 
   void VisitExpr_(const FunctionNode* op) final {
     for (const auto& param : op->params) {
@@ -228,8 +250,9 @@ class VarVisitor : protected ExprVisitor, protected PatternVisitor {
   void VisitPattern_(const PatternVarNode* op) final { MarkBounded(op->var); }
 
  private:
-  InsertionSet<Var> vars_;
-  InsertionSet<Var> bound_vars_;
+  InsertionSet<Id> var_ids_;
+  InsertionSet<Id> bound_var_ids_;
+  std::unordered_map<Id, relay::Type, ObjectPtrHash, ObjectPtrEqual> var_types_;
 };
 
 tvm::Array<TypeVar> FreeTypeVars(const Expr& expr, const IRModule& mod) {
