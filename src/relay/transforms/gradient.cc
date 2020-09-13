@@ -28,9 +28,9 @@
 #include <tvm/relay/transform.h>
 #include <tvm/te/operation.h>
 
-#include "let_list.h"
-#include "pass_util.h"
-#include "pattern_util.h"
+#include "./let_list.h"
+#include "./pass_util.h"
+#include "./pattern_util.h"
 
 namespace tvm {
 namespace relay {
@@ -94,7 +94,7 @@ Expr DeGlobal(const Optional<IRModule>& mod, const Expr& e) {
   }
 }
 
-/*! \brief A fragment of the program being built by the automatic differentation
+/*! \brief A fragment of the program being built by the automatic differentiation
  *  pass.
  */
 struct ADValueNode {
@@ -188,8 +188,8 @@ struct FirstOrderReverseAD : ExprFunctor<ADValue(const Expr&)> {
         [this, op_ref](const Type& orig_type, const std::vector<ADValue>& args, const Attrs& attrs,
                        const tvm::Array<Type>& type_args) {
           std::vector<Expr> call_args;
-          for (const ADValue& adval : args) {
-            call_args.push_back(adval->get<ADTensor>().forward);
+          for (const ADValue& ad_val : args) {
+            call_args.push_back(ad_val->get<ADTensor>().forward);
           }
           auto orig = Call(op_ref, call_args, attrs, type_args);
           orig->checked_type_ = orig_type;
@@ -218,19 +218,19 @@ struct FirstOrderReverseAD : ExprFunctor<ADValue(const Expr&)> {
       // special-case Tuple, to avoid long chains of GetItem/Tuple,
       // but we might have functions using tuples, so we don't know
       // that the reverse node is always a tuple
-      std::vector<Expr> grfields;
+      std::vector<Expr> gr_fields;
       if (auto tup_node = rev.as<TupleNode>()) {
         for (size_t i = 0; i < size; ++i) {
-          grfields.push_back(i != idx ? tup_node->fields[i]
-                                      : Add(tup_node->fields[i], ret->reverse));
+          gr_fields.push_back(i != idx ? tup_node->fields[i]
+                                       : Add(tup_node->fields[i], ret->reverse));
         }
       } else {
         for (size_t i = 0; i < size; ++i) {
-          grfields.push_back(i != idx ? TupleGetItem(rev, i)
-                                      : Add(TupleGetItem(rev, i), ret->reverse));
+          gr_fields.push_back(i != idx ? TupleGetItem(rev, i)
+                                       : Add(TupleGetItem(rev, i), ret->reverse));
         }
       }
-      tup->get<ADTensor>().reverse = ll->Push(Tuple(grfields));
+      tup->get<ADTensor>().reverse = ll->Push(Tuple(gr_fields));
     });
     return ret;
   }
