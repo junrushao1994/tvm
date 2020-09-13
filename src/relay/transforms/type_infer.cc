@@ -60,7 +60,7 @@ struct TupleGetItemAttrs : public tvm::AttrsNode<TupleGetItemAttrs> {
 bool TupleGetItemRel(const Array<Type>& types, int num_inputs, const Attrs& attrs,
                      const TypeReporter& reporter) {
   CHECK_EQ(types.size(), 2);
-  if (types[0].as<IncompleteTypeNode>()) return false;
+  if (types[0]->IsInstance<IncompleteTypeNode>()) return false;
   const auto* data = types[0].as<TupleTypeNode>();
   CHECK(data != nullptr) << "TupleGetItem expect input type to be TupleType "
                          << " get " << types[0] << " instead";
@@ -87,7 +87,7 @@ struct ResolvedTypeInfo {
 };
 
 //
-// The inference algorithm can roughly be devided into three stages:
+// The inference algorithm can roughly be divided into three stages:
 // - Populate the constraints by visiting the expression (TypeInferencer.GetType)
 //   - solver.AddConstraint and solver.Unify are called to populate the necessary constraints
 // - Solve the constraints (solver_.Solve)
@@ -124,12 +124,13 @@ class TypeInferencer : private ExprFunctor<Type(const Expr&)>,
   // map from expression to checked type
   // type inferencer will populate it up
   std::unordered_map<Expr, ResolvedTypeInfo, ObjectPtrHash, ObjectPtrEqual> type_map_;
+  // maps id to the last variable that has the vid
+  std::unordered_map<Id, Type, ObjectPtrHash, ObjectPtrEqual> id_last_type_;
 
   // The solver used by the inferencer.
   TypeSolver solver_;
   // relation function
   TypeRelationFn tuple_getitem_rel_;
-  TypeRelationFn make_tuple_rel_;
 
   // Perform unification on two types and report the error at the expression
   // or the span of the expression.
@@ -164,12 +165,21 @@ class TypeInferencer : private ExprFunctor<Type(const Expr&)>,
     this->err_reporter.RenderErrors(this->mod_);
   }
 
+  Type UnifyVarWithPrev(const VarNode* var, const Type& rtype) {
+    if (id_last_type_.count(var->vid)) {
+      Type last_type = id_last_type_.at(var->vid);
+      Unify(rtype, last_type, GetRef<Expr>(var));
+    }
+    id_last_type_[var->vid] = rtype;
+    return rtype;
+  }
+
   // Visitor Logic
   Type VisitExpr_(const VarNode* op) final {
     if (op->type_annotation.defined()) {
-      return op->type_annotation;
+      return UnifyVarWithPrev(op, op->type_annotation);
     } else {
-      return IncompleteType(Kind::kType);
+      return UnifyVarWithPrev(op, IncompleteType(Kind::kType));
     }
   }
 
@@ -311,7 +321,7 @@ class TypeInferencer : private ExprFunctor<Type(const Expr&)>,
 
   Type VisitExpr_(const LetNode* let) final {
     // if the definition is a function literal, permit recursion
-    bool is_functional_literal = let->value.as<FunctionNode>() != nullptr;
+    bool is_functional_literal = let->value->IsInstance<FunctionNode>();
     Type let_type = IncompleteType(Kind::kType);
 
     if (is_functional_literal) {
@@ -329,6 +339,7 @@ class TypeInferencer : private ExprFunctor<Type(const Expr&)>,
     CHECK(is_functional_literal || !type_map_.count(let->var));
     // NOTE: no scoping is necessary because var are unique in program
     type_map_[let->var].checked_type = let_type;
+    UnifyVarWithPrev(let->var.get(), let_type);
     return GetType(let->body);
   }
 
@@ -391,7 +402,7 @@ class TypeInferencer : private ExprFunctor<Type(const Expr&)>,
     return Downcast<FuncType>(inst_ty);
   }
 
-  // instantiates starting from incompletes
+  // instantiates starting from incomplete types
   FuncType InstantiateFuncType(const FuncTypeNode* fn_ty) {
     if (fn_ty->type_params.size() == 0) {
       return GetRef<FuncType>(fn_ty);
@@ -490,9 +501,9 @@ class TypeInferencer : private ExprFunctor<Type(const Expr&)>,
       arg_types.push_back(GetType(arg));
     }
 
-    if (const OpNode* opnode = call->op.as<OpNode>()) {
-      Type rtype = PrimitiveCall(opnode->op_type.as<FuncTypeNode>(), arg_types, call->attrs,
-                                 GetRef<Call>(call));
+    if (const OpNode* op = call->op.as<OpNode>()) {
+      Type rtype =
+          PrimitiveCall(op->op_type.as<FuncTypeNode>(), arg_types, call->attrs, GetRef<Call>(call));
       if (rtype.defined()) {
         AddTypeArgs(GetRef<Call>(call), arg_types);
         return rtype;
@@ -612,7 +623,7 @@ class TypeInferencer::Resolver : public ExprMutator, PatternMutator {
         << "Cannot resolve type of " << GetRef<Expr>(op) << " at " << op->span;
 
     Expr new_e = ExprMutator::VisitExpr_(op);
-    // new_call and new_var's code is only going to be valid for VarNode/CallNode.
+    // new_call and new_var code is only going to be valid for VarNode/CallNode.
     // Compiler optimization will likely fold these away for other nodes.
     CallNode* new_call = (std::is_base_of<CallNode, T>::value
                               ? const_cast<CallNode*>(static_cast<const CallNode*>(new_e.get()))
@@ -722,8 +733,9 @@ Expr InferType(const Expr& expr, const IRModule& mod) {
   auto inferencer = TypeInferencer(mod, main);
   auto e = inferencer.Infer(expr);
   CHECK(WellFormed(e));
-  auto free_tvars = FreeTypeVars(e, mod);
-  CHECK(free_tvars.size() == 0) << "Found unbound type variables in " << e << ": " << free_tvars;
+  auto free_type_vars = FreeTypeVars(e, mod);
+  CHECK(free_type_vars.size() == 0)
+      << "Found unbound type variables in " << e << ": " << free_type_vars;
   EnsureCheckedType(e);
   return e;
 }
@@ -736,10 +748,10 @@ Function InferType(const Function& func, const IRModule& mod, const GlobalVar& v
   Expr func_ret = TypeInferencer(mod, var).Infer(func_copy);
   mod->Remove(var);
   CHECK(WellFormed(func_ret));
-  auto free_tvars = FreeTypeVars(func_ret, mod);
-  CHECK(free_tvars.size() == 0) << "Found unbound type variables in: " << std::endl
-                                << AsText(func, true) << std::endl
-                                << free_tvars;
+  auto free_type_vars = FreeTypeVars(func_ret, mod);
+  CHECK(free_type_vars.size() == 0) << "Found unbound type variables in: " << std::endl
+                                    << AsText(func, true) << std::endl
+                                    << free_type_vars;
   return Downcast<Function>(func_ret);
 }
 
