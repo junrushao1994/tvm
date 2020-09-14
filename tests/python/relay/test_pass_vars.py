@@ -30,32 +30,29 @@ from tvm.relay.analysis import (
 def assert_vars_match(actual, expected):
     assert len(actual) == len(expected)
     for i in range(len(actual)):
-        assert actual[i] == expected[i]
+        assert actual[i].name_hint == expected[i].name_hint
 
 
 def test_free_vars():
     ty = relay.TensorType([], "int32")
     x = relay.Var("x", ty)
     fvx = free_vars(x)
-    assert len(fvx) == 1
-    assert fvx[0] == x
+    assert_vars_match(fvx, [x])
     v = relay.Constant(tvm.nd.array(10))
 
     let = relay.Let(x, v, x)
     fvx = free_vars(let)
-    assert len(free_vars(let)) == 0
+    assert_vars_match(fvx, [])
     f = relay.Function([x], x, ty)
-    assert len(free_vars(f)) == 0
+    assert_vars_match(free_vars(f), [])
 
 
 def test_free_vars_tuple():
     t = relay.Var("t")
     fv = free_vars(relay.Tuple([t, t]))
-    assert len(fv) == 1
-    assert fv[0] == t
+    assert_vars_match(fv, [t])
     fv = free_vars(relay.TupleGetItem(t, 123))
-    assert len(fv) == 1
-    assert fv[0] == t
+    assert_vars_match(fv, [t])
 
 
 def test_free_type_vars():
@@ -65,8 +62,7 @@ def test_free_type_vars():
     y = relay.Var("y")
     let = relay.Let(x, y, x)
     fvl = free_vars(let)
-    assert len(fvl) == 1
-    assert fvl[0] == y
+    assert_vars_match(fvl, [y])
     ftvl = free_type_vars(let)
     assert len(ftvl) == 1
     assert ftvl[0] == tp
@@ -203,3 +199,4 @@ def test_all_type_vars():
 
     f5 = relay.Function([w], w)
     assert len(all_type_vars(f5)) == 0
+

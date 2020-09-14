@@ -69,6 +69,7 @@ def test_simplify_batchnorm(dtype="float32"):
         simplify = SimplifyInference()
         mod = simplify(mod)
         y1 = mod["main"].body
+        y2 = IRModule.from_expr(y2)["main"].body
 
         assert structural_equal(y1, y2, map_free_vars=True)
 
