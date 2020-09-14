@@ -55,29 +55,41 @@ def run_opt_pass(expr, opt_pass):
     return entry if isinstance(expr, relay.Function) else entry.body
 
 
+def _as_func(expr):
+    mod = tvm.IRModule.from_expr(expr)
+    return mod["main"]
+
+
 def test_let():
     orig = relay.Let(e.x, e.y, e.z)
     orig = run_opt_pass(orig, transform.DeadCodeElimination())
-    assert tvm.ir.structural_equal(Function(free_vars(orig), orig), Function([e.z], e.z))
+    orig = _as_func(Function(free_vars(orig), orig))
+    expected = _as_func(Function([e.z], e.z))
+    assert tvm.ir.structural_equal(orig, expected)
 
 
 def test_used_let():
     orig = relay.Let(e.c, e.one, e.c + e.c)
     orig = run_opt_pass(orig, transform.DeadCodeElimination())
-    expected = relay.Let(e.c, e.one, e.c + e.c)
-    assert tvm.ir.structural_equal(Function([], orig), Function([], expected))
+    orig = _as_func(Function([], orig))
+    expected = _as_func(relay.Let(e.c, e.one, e.c + e.c))
+    assert tvm.ir.structural_equal(orig, expected)
 
 
 def test_inline():
     orig = relay.Let(e.a, e.b, relay.Let(e.c, e.d, e.c))
     orig = run_opt_pass(orig, transform.DeadCodeElimination(True))
-    tvm.ir.assert_structural_equal(Function(free_vars(orig), orig), Function([e.d], e.d))
+    orig = _as_func(Function(free_vars(orig), orig))
+    expected = _as_func(Function([e.d], e.d))
+    tvm.ir.assert_structural_equal(orig, expected)
 
 
 def test_chain_unused_let():
     orig = relay.Let(e.a, e.b, relay.Let(e.c, e.d, e.e))
     orig = run_opt_pass(orig, transform.DeadCodeElimination())
-    assert tvm.ir.structural_equal(Function(free_vars(orig), orig), Function([e.e], e.e))
+    orig = _as_func(Function(free_vars(orig), orig))
+    expected = _as_func(Function([e.e], e.e))
+    assert tvm.ir.structural_equal(orig, expected)
 
 
 def use_f(func):
@@ -123,8 +135,8 @@ def test_op_let():
 
 
 def test_tuple_get_item():
-    tt = relay.TupleType([e.float32, e.float32])
-    t = relay.Var("t", tt)
+    t = relay.TupleType([e.float32, e.float32])
+    t = relay.Var("t", t)
     a = relay.Var("a")
     g = relay.TupleGetItem(t, 0)
     dced = run_opt_pass(g, transform.DeadCodeElimination())

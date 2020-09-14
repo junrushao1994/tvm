@@ -37,17 +37,16 @@ namespace tvm {
 namespace relay {
 
 template <typename X>
-using VarMap = std::unordered_map<Var, X, ObjectPtrHash, ObjectPtrEqual>;
-using VarSet = std::unordered_set<Var, ObjectPtrHash, ObjectPtrEqual>;
+using VarIdMap = std::unordered_map<Id, X, ObjectPtrHash, ObjectPtrEqual>;
 
 class CalcDep;
 class FindDef : private ExprVisitor {
  private:
-  VarMap<Expr> expr_map_;
+  VarIdMap<Expr> expr_map_;
 
   void VisitExpr_(const LetNode* l) final {
-    CHECK_EQ(expr_map_.count(l->var), 0);
-    expr_map_[l->var] = l->value;
+    CHECK_EQ(expr_map_.count(l->var->vid), 0);
+    expr_map_[l->var->vid] = l->value;
     VisitExpr(l->value);
     VisitExpr(l->body);
   }
@@ -57,15 +56,16 @@ class FindDef : private ExprVisitor {
 
 class Eliminator : private ExprMutator {
  private:
-  VarMap<Expr> expr_map_;
-  VarMap<size_t> use_map_;
+  VarIdMap<Expr> expr_map_;
+  VarIdMap<size_t> use_map_;
   bool inline_once_;
-  explicit Eliminator(const VarMap<Expr>& expr_map, const VarMap<size_t>& use_map, bool inline_once)
+  explicit Eliminator(const VarIdMap<Expr>& expr_map, const VarIdMap<size_t>& use_map,
+                      bool inline_once)
       : expr_map_(expr_map), use_map_(use_map), inline_once_(inline_once) {}
   friend CalcDep;
 
   bool HasLet(const Var& v) {
-    switch (use_map_[v]) {
+    switch (use_map_[v->vid]) {
       case 0:
         return false;
       case 1:
@@ -77,7 +77,7 @@ class Eliminator : private ExprMutator {
 
   Expr VisitExpr_(const VarNode* op) final {
     Var v = GetRef<Var>(op);
-    return (expr_map_.count(v) == 0 || HasLet(v)) ? v : VisitExpr(expr_map_[v]);
+    return (expr_map_.count(op->vid) == 0 || HasLet(v)) ? v : VisitExpr(expr_map_[op->vid]);
   }
 
   Expr VisitExpr_(const LetNode* op) final {
@@ -103,15 +103,15 @@ class CalcDep : protected MixedModeVisitor {
   }
 
  private:
-  explicit CalcDep(const VarMap<Expr>& expr_map) : MixedModeVisitor(2), expr_map_(expr_map) {}
-  VarMap<Expr> expr_map_;
-  VarMap<size_t> use_map_;
+  explicit CalcDep(const VarIdMap<Expr>& expr_map) : MixedModeVisitor(2), expr_map_(expr_map) {}
+  VarIdMap<Expr> expr_map_;
+  VarIdMap<size_t> use_map_;
 
   using MixedModeVisitor::VisitExpr_;
 
   void VisitLeaf(const Expr& e) final {
     visit_counter_[e.get()]++;
-    // The dce code seprate variable into three parts:
+    // The dce code separate variable into three parts:
     // used 0 times (remove)
     // used 1 times (inline)
     // used 2 times (dont do anything).
@@ -124,10 +124,9 @@ class CalcDep : protected MixedModeVisitor {
   void VisitExpr_(const LetNode* l) final { VisitExpr(l->body); }
 
   void VisitExpr_(const VarNode* v) final {
-    Var var = GetRef<Var>(v);
-    ++use_map_[var];
-    if (use_map_[var] == 1 && expr_map_.count(var) > 0) {
-      VisitExpr(expr_map_[var]);
+    ++use_map_[v->vid];
+    if (use_map_[v->vid] == 1 && expr_map_.count(v->vid) > 0) {
+      VisitExpr(expr_map_[v->vid]);
     }
   }
 };

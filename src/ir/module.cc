@@ -185,16 +185,17 @@ tvm::Array<T> concat(const tvm::Array<T>& l, const tvm::Array<T>& r) {
 
 // helper function to run type check
 relay::Function RunTypeCheck(const IRModule& mod, const GlobalVar& var, relay::Function f) {
-  auto func = Downcast<relay::Function>(relay::DeDup(relay::VarToId(std::move(f))));
+  f = Downcast<relay::Function>(relay::VarToId(std::move(f)));
+  f = Downcast<relay::Function>(relay::DeDup(std::move(f)));
   // Type check the item before we add it to the module.
-  auto fv = relay::FreeVars(func);
-  auto ftv = relay::FreeTypeVars(func, mod);
+  auto fv = relay::FreeVars(f);
+  auto ftv = relay::FreeTypeVars(f, mod);
   CHECK_EQ(fv.size(), 0) << "There are free variables: " << fv
-                         << " in function: " << AsText(func, false);
+                         << " in function: " << AsText(f, false);
   CHECK_EQ(ftv.size(), 0) << "There are free type variables: " << fv
-                          << " in function: " << AsText(func, false);
+                          << " in function: " << AsText(f, false);
   // Type check the item before we add it to the module.
-  relay::Function checked_func = InferType(func, mod, var);
+  relay::Function checked_func = InferType(f, mod, var);
   return checked_func;
 }
 

@@ -70,9 +70,14 @@ Expr VarToId(const Expr& e) {
     return e;
   }
   VarToIdMutator::TIdMap id_map;
+  std::unordered_map<Id, Id, ObjectPtrHash, ObjectPtrEqual> id_converter;
   for (const auto& kv : counter) {
     const Var& var = kv.first;
-    id_map[var] = Id(var->vid->name_hint);
+    if (id_converter.count(var->vid)) {
+      id_map[var] = id_converter.at(var->vid);
+    } else {
+      id_map[var] = id_converter[var->vid] = Id(var->vid->name_hint);
+    }
   }
   return VarToIdMutator(id_map).VisitExpr(e);
 }
