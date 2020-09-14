@@ -119,3 +119,4 @@ def test_tuple_get_time():
 if __name__ == "__main__":
     test_simple()
     test_callback()
+    test_tuple_get_time()

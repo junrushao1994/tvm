@@ -41,6 +41,12 @@ class CommonSubexprEliminator : public MixedModeMutator {
  public:
   explicit CommonSubexprEliminator(runtime::TypedPackedFunc<bool(Expr)> fskip) : fskip_(fskip) {}
 
+  static bool IsEqualVar(const Expr& lhs, const Expr& rhs) {
+    const auto* l = lhs.as<VarNode>();
+    const auto* r = rhs.as<VarNode>();
+    return l != nullptr && r != nullptr && l->vid.same_as(r->vid);
+  }
+
   Expr Rewrite_(const CallNode* call, const Expr& post) final {
     static auto op_stateful = Op::GetAttrMap<TOpIsStateful>("TOpIsStateful");
     Expr new_expr = post;
@@ -66,6 +72,7 @@ class CommonSubexprEliminator : public MixedModeMutator {
           }
           for (size_t i = 0; i < new_call->args.size(); i++) {
             if (!new_call->args[i].same_as(candidate->args[i]) &&
+                !IsEqualVar(new_call->args[i], candidate->args[i]) &&
                 !IsEqualScalar(new_call->args[i], candidate->args[i])) {
               is_equivalent = false;
               break;
