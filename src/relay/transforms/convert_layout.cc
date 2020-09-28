@@ -65,7 +65,7 @@ class ConvertTransformMemorizerNode : public TransformMemorizerNode {
 /*!
  * \brief Container that provides the transformation function for convert layout.
  */
-class ConvertTransformMemorizer : public TransformMemorizer {
+class ConvertTransformMemorizer : public TransformMemorizer { // also a potential problem
  public:
   ConvertTransformMemorizer() {}
   explicit ConvertTransformMemorizer(ObjectPtr<Object> n) : TransformMemorizer(n) {}
