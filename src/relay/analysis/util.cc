@@ -364,10 +364,10 @@ TVM_REGISTER_GLOBAL("relay.analysis.all_dtypes").set_body_typed(AllDtypes);
  * \param body The body expression.
  * \return The reference count mapping.
  */
-std::unordered_map<const Object*, size_t> GetExprRefCount(const Expr& body) {
+std::unordered_map<const Expr, size_t, RelayNodeHash, RelayNodeEqual> GetExprRefCount(const Expr& body) {
   class ExprRefCounter : private MixedModeVisitor {
    public:
-    std::unordered_map<const Object*, size_t> Get(const Expr& body) {
+    std::unordered_map<const Expr, size_t, RelayNodeHash, RelayNodeEqual> Get(const Expr& body) {
       this->VisitExpr(body);
       return std::move(this->visit_counter_);
     }

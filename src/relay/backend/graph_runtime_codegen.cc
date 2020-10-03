@@ -305,7 +305,7 @@ class GraphRuntimeCodegen : public backend::MemoizedExprTranslator<std::vector<G
 
   std::vector<GraphNodeRef> VisitExpr_(const VarNode* op) override {
     Expr expr = GetRef<Expr>(op);
-    return var_map_[expr.get()];
+    return var_map_[expr];
   }
 
   std::vector<GraphNodeRef> VisitExpr_(const ConstantNode* op) override {

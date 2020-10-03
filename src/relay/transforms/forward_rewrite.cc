@@ -80,7 +80,7 @@ class ForwardRewriter : private MixedModeMutator {
   // The multiple reference trigger
   std::function<Expr(const Expr&)> fmulti_ref_trigger_{nullptr};
   // Internal ref counter
-  std::unordered_map<const Object*, size_t> ref_counter_;
+  std::unordered_map<const Expr, size_t, RelayNodeHash, RelayNodeEqual> ref_counter_;
   // internal realizer
   TempRealizer realizer_;
 

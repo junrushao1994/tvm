@@ -535,9 +535,9 @@ class PatternGrouper {
   class MatchExtractor : public ExprMutator {
    public:
     explicit MatchExtractor(
-        const std::unordered_map<Expr, Var, ObjectPtrHash, ObjectPtrEqual>& inputs)
+        const std::unordered_map<Expr, Var, RelayNodeHash, RelayNodeEqual>& inputs)
         : inputs_(inputs) {}
-    const std::unordered_map<Expr, Expr, ObjectPtrHash, ObjectPtrEqual>& GetMemo() {
+    const std::unordered_map<Expr, Expr, RelayNodeHash, RelayNodeEqual>& GetMemo() {
       return this->memo_;
     }
     const std::string& GetName() { return name_; }

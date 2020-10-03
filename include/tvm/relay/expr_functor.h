@@ -168,7 +168,7 @@ class ExprVisitor : public ::tvm::relay::ExprFunctor<void(const Expr& n)> {
 
  protected:
   // Internal visiting counter
-  std::unordered_map<const Object*, size_t> visit_counter_;
+  std::unordered_map<const Expr, size_t, RelayNodeHash, RelayNodeEqual> visit_counter_;
 };
 
 /*!
@@ -215,7 +215,7 @@ class ExprMutator : public ::tvm::relay::ExprFunctor<Expr(const Expr&)> {
 
  protected:
   /*! \brief Internal map used for memoization. */
-  std::unordered_map<Expr, Expr, ObjectPtrHash, ObjectPtrEqual> memo_;
+  std::unordered_map<Expr, Expr, RelayNodeHash, RelayNodeEqual> memo_;
 };
 
 /*!

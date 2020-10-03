@@ -108,17 +108,17 @@ MixedModeVisitor::MixedModeVisitor(int visit_limit) {
 }
 
 void MixedModeVisitor::VisitLeaf(const Expr& expr) {
-  if (visit_counter_[expr.get()] < visit_limit_) {
+  if (visit_counter_[expr] < visit_limit_) {
     ExprFunctor::VisitExpr(expr);
   }
-  visit_counter_[expr.get()]++;
+  visit_counter_[expr]++;
 }
 
 bool MixedModeVisitor::CheckVisited(const Expr& expr) {
-  if (visit_counter_[expr.get()] < visit_limit_) {
+  if (visit_counter_[expr] < visit_limit_) {
     return false;
   } else {
-    visit_counter_[expr.get()]++;
+    visit_counter_[expr]++;
     return true;
   }
 }
@@ -126,7 +126,7 @@ bool MixedModeVisitor::CheckVisited(const Expr& expr) {
 void MixedModeVisitor::VisitExpr(const Expr& expr) {
   auto fcheck_visited = [this](const Expr& expr) { return this->CheckVisited(expr); };
   auto fvisit_leaf = [this](const Expr& expr) { return this->VisitLeaf(expr); };
-  if (visit_counter_[expr.get()] < visit_limit_) {
+  if (visit_counter_[expr] < visit_limit_) {
     ExpandDataflow(expr, fcheck_visited, fvisit_leaf);
   }
 }
@@ -258,20 +258,7 @@ Expr ExprMutator::VisitExpr_(const FunctionNode* op) {
 }
 
 Expr ExprMutator::VisitExpr_(const CallNode* call_node) {
-  auto new_op = this->Mutate(call_node->op);
-  bool unchanged = call_node->op.same_as(new_op);
-
-  tvm::Array<Type> ty_args;
-  for (auto ty_arg : call_node->type_args) {
-    auto new_ty_arg = this->VisitType(ty_arg);
-    ty_args.push_back(new_ty_arg);
-    unchanged &= new_ty_arg.same_as(ty_arg);
-  }
-
-  tvm::Array<Expr> call_args;
-  for (auto arg : call_node->args) {
-    auto new_arg = this->Mutate(arg);
-    call_args.push_back(new_arg);
+  auto new_op = this->Mutate(call_node->op);const VarNode* op
     unchanged &= new_arg.same_as(arg);
   }
 
@@ -376,13 +363,13 @@ Pattern ExprMutator::VisitPattern(const Pattern& p) { return p; }
 Type ExprMutator::VisitType(const Type& t) { return t; }
 
 void ExprVisitor::VisitExpr(const Expr& expr) {
-  auto it = visit_counter_.find(expr.get());
+  auto it = visit_counter_.find(expr);
   if (it != visit_counter_.end()) {
     ++it->second;
   } else {
     using TParent = ExprFunctor<void(const Expr&)>;
     TParent::VisitExpr(expr);
-    visit_counter_.insert({expr.get(), 1});
+    visit_counter_.insert({expr, 1});
   }
 }
 
