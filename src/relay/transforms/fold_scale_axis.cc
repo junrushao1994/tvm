@@ -610,24 +610,26 @@ using FBackwardTransform =
 class BackwardPrep : private ExprVisitor {
  public:
   // The message on each node.
-  std::unordered_map<const Object*, Message> Prepare(const Expr& body) {
+  std::unordered_map<const Expr, Message, RelayNodeHash, RelayNodeEqual> Prepare(const Expr& body) {
     ref_counter_ = GetExprRefCount(body);
     this->VisitExpr(body);
     return std::move(message_);
   }
 
+  // WHAT IS GOING ON HERE?????? 
+
  private:
   // The message on each node.
-  std::unordered_map<const Object*, Message> message_;
+  std::unordered_map<const Expr, Message, RelayNodeHash, RelayNodeEqual> message_;
   // reference counter of an internal expr
-  std::unordered_map<const Object*, size_t> ref_counter_;
+  std::unordered_map<const Expr, size_t, RelayNodeHash, RelayNodeEqual> ref_counter_;
   // Visit the expression.
   void VisitExpr_(const CallNode* call) {
     ExprVisitor::VisitExpr_(call);
     static const auto& fprep = Op::GetAttrMap<FBackwardPrep>("FScaleAxisBackwardPrep");
     auto f = fprep.get(call->op, nullptr);
     if (f == nullptr) return;
-    auto rit = ref_counter_.find(call);
+    auto rit = ref_counter_.find(GetRef<Expr>(call));
     CHECK(rit != ref_counter_.end());
     // We only allow propagation of scale backward
     // if the expression is only referred by a single parent.

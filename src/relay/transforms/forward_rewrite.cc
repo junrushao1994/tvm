@@ -88,7 +88,7 @@ class ForwardRewriter : private MixedModeMutator {
   Expr GetTempExpr(const Expr& expr, const Expr& post) {
     if (fmulti_ref_trigger_ != nullptr) {
       Expr ret = post;
-      auto it = ref_counter_.find(expr.get());
+      auto it = ref_counter_.find(expr);
       CHECK(it != ref_counter_.end());
       if (it->second > 1) {
         ret = fmulti_ref_trigger_(ret);

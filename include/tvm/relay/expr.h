@@ -656,16 +656,12 @@ inline size_t RelayNodeHash::operator()(const Expr& a) const {
 inline bool RelayNodeEqual::operator()(const Expr& a, const Expr& b) const {
   Expr left = a;
   Expr right = b;
-  if (const auto* var_node = a.as<VarNode>()) {
-    left = GetRef<Expr>(var_node->vid.as<IdNode>());
+  if (const auto* va = a.as<VarNode>()) {
+    if (const auto* vb = b.as<VarNode>()) {
+      return va->vid.same_as(vb->vid);
+   }
   }
-  if (const auto* var_node = b.as<VarNode>()) {
-    right = GetRef<Expr>(var_node->vid.as<IdNode>());
-  }
-  if (left.same_as(right)) {
-    return true;
-  }
-  return false;
+  return ObjectEqual()(a, b);
 }
 
 }  // namespace relay
