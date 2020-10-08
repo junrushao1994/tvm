@@ -589,7 +589,7 @@ class PatternGrouper {
       return out;
     };
     std::string name_;
-    const std::unordered_map<Expr, Var, ObjectPtrHash, ObjectPtrEqual> inputs_;
+    const std::unordered_map<Expr, Var, RelayNodeHash, RelayNodeEqual> inputs_;
   };
 
   /*! \brief Create a group based on a matched expression */

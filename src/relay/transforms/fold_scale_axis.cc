@@ -636,7 +636,7 @@ class BackwardPrep : private ExprVisitor {
     if (rit->second != 1) return;
     Array<Message> in_messages;
     for (Expr arg : call->args) {
-      auto it = message_.find(arg.get());
+      auto it = message_.find(arg);
       if (it != message_.end()) {
         in_messages.push_back(it->second);
       } else {
@@ -645,7 +645,7 @@ class BackwardPrep : private ExprVisitor {
     }
     Message out_message = f(GetRef<Call>(call), in_messages);
     if (out_message.defined()) {
-      message_[call] = out_message;
+      message_[GetRef<Expr>(call)] = out_message;
     }
   }
 };
@@ -654,7 +654,7 @@ class BackwardTransformerNode : public Object, private ExprMutator {
  public:
   // Run forward transform.
   Expr Fold(Expr expr) {
-    message_ = BackwardPrep().Prepare(expr);
+    message_ = BackwardPrep().Prepare(GetRef<Expr>(expr));
     return this->Mutate(expr);
   }
   /*!
