@@ -258,7 +258,20 @@ Expr ExprMutator::VisitExpr_(const FunctionNode* op) {
 }
 
 Expr ExprMutator::VisitExpr_(const CallNode* call_node) {
-  auto new_op = this->Mutate(call_node->op);const VarNode* op
+  auto new_op = this->Mutate(call_node->op);
+  bool unchanged = call_node->op.same_as(new_op);
+
+  tvm::Array<Type> ty_args;
+  for (auto ty_arg : call_node->type_args) {
+    auto new_ty_arg = this->VisitType(ty_arg);
+    ty_args.push_back(new_ty_arg);
+    unchanged &= new_ty_arg.same_as(ty_arg);
+  }
+
+  tvm::Array<Expr> call_args;
+  for (auto arg : call_node->args) {
+    auto new_arg = this->Mutate(arg);
+    call_args.push_back(new_arg);
     unchanged &= new_arg.same_as(arg);
   }
 
