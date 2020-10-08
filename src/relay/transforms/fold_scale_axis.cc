@@ -616,8 +616,6 @@ class BackwardPrep : private ExprVisitor {
     return std::move(message_);
   }
 
-  // WHAT IS GOING ON HERE?????? 
-
  private:
   // The message on each node.
   std::unordered_map<const Expr, Message, RelayNodeHash, RelayNodeEqual> message_;
@@ -654,7 +652,7 @@ class BackwardTransformerNode : public Object, private ExprMutator {
  public:
   // Run forward transform.
   Expr Fold(Expr expr) {
-    message_ = BackwardPrep().Prepare(GetRef<Expr>(expr));
+    message_ = BackwardPrep().Prepare(expr);
     return this->Mutate(expr);
   }
   /*!
@@ -695,7 +693,7 @@ class BackwardTransformerNode : public Object, private ExprMutator {
    * \return The message containing the expected axes and whether positive scale is required.
    */
   Message GetMessage(const Expr& expr) const {
-    auto it = message_.find(expr.get());
+    auto it = message_.find(expr);
     if (it != message_.end()) return it->second;
     return NullValue<Message>();
   }
@@ -708,7 +706,7 @@ class BackwardTransformerNode : public Object, private ExprMutator {
 
  private:
   // Valid axes on each node.
-  std::unordered_map<const Object*, Message> message_;
+  std::unordered_map<const Expr, Message, RelayNodeHash, RelayNodeEqual> message_;
   // Override mutation of call.
   Expr VisitExpr_(const CallNode* call_node) final {
     return Transform(call_node, NullValue<Message>(), NullValue<Expr>());

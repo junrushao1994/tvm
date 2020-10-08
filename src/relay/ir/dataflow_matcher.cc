@@ -615,7 +615,7 @@ class PatternGrouper {
     group.root_node = expr;
     group.matched_nodes = node_map;
 
-    std::unordered_map<Expr, Var, ObjectPtrHash, ObjectPtrEqual> inputs;
+    std::unordered_map<Expr, Var, RelayNodeHash, RelayNodeEqual> inputs;
     Array<Var> params;
     for (auto node : pattern_graph_.topological_order_) {
       if (node->inputs_.size() == 0) {
