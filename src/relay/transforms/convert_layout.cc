@@ -65,7 +65,7 @@ class ConvertTransformMemorizerNode : public TransformMemorizerNode {
 /*!
  * \brief Container that provides the transformation function for convert layout.
  */
-class ConvertTransformMemorizer : public TransformMemorizer {
+class ConvertTransformMemorizer : public TransformMemorizer { // also a potential problem
  public:
   ConvertTransformMemorizer() {}
   explicit ConvertTransformMemorizer(ObjectPtr<Object> n) : TransformMemorizer(n) {}
@@ -73,6 +73,7 @@ class ConvertTransformMemorizer : public TransformMemorizer {
   ConvertTransformMemorizerNode* operator->() {
     return static_cast<ConvertTransformMemorizerNode*>(get_mutable());
   }
+
 
   /*!
    * \brief Defines the call transformation for ConvertLayout pass. The new layouts should be the

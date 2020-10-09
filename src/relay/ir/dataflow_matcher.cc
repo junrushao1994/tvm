@@ -535,9 +535,9 @@ class PatternGrouper {
   class MatchExtractor : public ExprMutator {
    public:
     explicit MatchExtractor(
-        const std::unordered_map<Expr, Var, ObjectPtrHash, ObjectPtrEqual>& inputs)
+        const std::unordered_map<Expr, Var, RelayNodeHash, RelayNodeEqual>& inputs)
         : inputs_(inputs) {}
-    const std::unordered_map<Expr, Expr, ObjectPtrHash, ObjectPtrEqual>& GetMemo() {
+    const std::unordered_map<Expr, Expr, RelayNodeHash, RelayNodeEqual>& GetMemo() {
       return this->memo_;
     }
     const std::string& GetName() { return name_; }
@@ -589,7 +589,7 @@ class PatternGrouper {
       return out;
     };
     std::string name_;
-    const std::unordered_map<Expr, Var, ObjectPtrHash, ObjectPtrEqual> inputs_;
+    const std::unordered_map<Expr, Var, RelayNodeHash, RelayNodeEqual> inputs_;
   };
 
   /*! \brief Create a group based on a matched expression */
@@ -615,7 +615,7 @@ class PatternGrouper {
     group.root_node = expr;
     group.matched_nodes = node_map;
 
-    std::unordered_map<Expr, Var, ObjectPtrHash, ObjectPtrEqual> inputs;
+    std::unordered_map<Expr, Var, RelayNodeHash, RelayNodeEqual> inputs;
     Array<Var> params;
     for (auto node : pattern_graph_.topological_order_) {
       if (node->inputs_.size() == 0) {

@@ -610,7 +610,7 @@ using FBackwardTransform =
 class BackwardPrep : private ExprVisitor {
  public:
   // The message on each node.
-  std::unordered_map<const Object*, Message> Prepare(const Expr& body) {
+  std::unordered_map<const Expr, Message, RelayNodeHash, RelayNodeEqual> Prepare(const Expr& body) {
     ref_counter_ = GetExprRefCount(body);
     this->VisitExpr(body);
     return std::move(message_);
@@ -618,23 +618,23 @@ class BackwardPrep : private ExprVisitor {
 
  private:
   // The message on each node.
-  std::unordered_map<const Object*, Message> message_;
+  std::unordered_map<const Expr, Message, RelayNodeHash, RelayNodeEqual> message_;
   // reference counter of an internal expr
-  std::unordered_map<const Object*, size_t> ref_counter_;
+  std::unordered_map<const Expr, size_t, RelayNodeHash, RelayNodeEqual> ref_counter_;
   // Visit the expression.
   void VisitExpr_(const CallNode* call) {
     ExprVisitor::VisitExpr_(call);
     static const auto& fprep = Op::GetAttrMap<FBackwardPrep>("FScaleAxisBackwardPrep");
     auto f = fprep.get(call->op, nullptr);
     if (f == nullptr) return;
-    auto rit = ref_counter_.find(call);
+    auto rit = ref_counter_.find(GetRef<Expr>(call));
     CHECK(rit != ref_counter_.end());
     // We only allow propagation of scale backward
     // if the expression is only referred by a single parent.
     if (rit->second != 1) return;
     Array<Message> in_messages;
     for (Expr arg : call->args) {
-      auto it = message_.find(arg.get());
+      auto it = message_.find(arg);
       if (it != message_.end()) {
         in_messages.push_back(it->second);
       } else {
@@ -643,7 +643,7 @@ class BackwardPrep : private ExprVisitor {
     }
     Message out_message = f(GetRef<Call>(call), in_messages);
     if (out_message.defined()) {
-      message_[call] = out_message;
+      message_[GetRef<Expr>(call)] = out_message;
     }
   }
 };
@@ -693,7 +693,7 @@ class BackwardTransformerNode : public Object, private ExprMutator {
    * \return The message containing the expected axes and whether positive scale is required.
    */
   Message GetMessage(const Expr& expr) const {
-    auto it = message_.find(expr.get());
+    auto it = message_.find(expr);
     if (it != message_.end()) return it->second;
     return NullValue<Message>();
   }
@@ -706,7 +706,7 @@ class BackwardTransformerNode : public Object, private ExprMutator {
 
  private:
   // Valid axes on each node.
-  std::unordered_map<const Object*, Message> message_;
+  std::unordered_map<const Expr, Message, RelayNodeHash, RelayNodeEqual> message_;
   // Override mutation of call.
   Expr VisitExpr_(const CallNode* call_node) final {
     return Transform(call_node, NullValue<Message>(), NullValue<Expr>());

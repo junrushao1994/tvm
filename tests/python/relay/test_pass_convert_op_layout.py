@@ -396,9 +396,11 @@ def test_resnet_convert_layout():
         return relay.Function(analysis.free_vars(y), y)
 
     a = before()
+    print("before: \n", a)
     a = run_opt_pass(a, transform.ConvertLayout({"nn.conv2d": ["NCHW", "default"]}))
     b = run_opt_pass(expected(), transform.InferType())
-
+    print("expected: \n", b)
+    print("actual: \n", a)
     assert tvm.ir.structural_equal(a, b), "Actual = \n" + str(a)
 
 

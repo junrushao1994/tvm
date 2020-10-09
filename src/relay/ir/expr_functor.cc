@@ -108,17 +108,17 @@ MixedModeVisitor::MixedModeVisitor(int visit_limit) {
 }
 
 void MixedModeVisitor::VisitLeaf(const Expr& expr) {
-  if (visit_counter_[expr.get()] < visit_limit_) {
+  if (visit_counter_[expr] < visit_limit_) {
     ExprFunctor::VisitExpr(expr);
   }
-  visit_counter_[expr.get()]++;
+  visit_counter_[expr]++;
 }
 
 bool MixedModeVisitor::CheckVisited(const Expr& expr) {
-  if (visit_counter_[expr.get()] < visit_limit_) {
+  if (visit_counter_[expr] < visit_limit_) {
     return false;
   } else {
-    visit_counter_[expr.get()]++;
+    visit_counter_[expr]++;
     return true;
   }
 }
@@ -126,7 +126,7 @@ bool MixedModeVisitor::CheckVisited(const Expr& expr) {
 void MixedModeVisitor::VisitExpr(const Expr& expr) {
   auto fcheck_visited = [this](const Expr& expr) { return this->CheckVisited(expr); };
   auto fvisit_leaf = [this](const Expr& expr) { return this->VisitLeaf(expr); };
-  if (visit_counter_[expr.get()] < visit_limit_) {
+  if (visit_counter_[expr] < visit_limit_) {
     ExpandDataflow(expr, fcheck_visited, fvisit_leaf);
   }
 }
@@ -376,13 +376,13 @@ Pattern ExprMutator::VisitPattern(const Pattern& p) { return p; }
 Type ExprMutator::VisitType(const Type& t) { return t; }
 
 void ExprVisitor::VisitExpr(const Expr& expr) {
-  auto it = visit_counter_.find(expr.get());
+  auto it = visit_counter_.find(expr);
   if (it != visit_counter_.end()) {
     ++it->second;
   } else {
     using TParent = ExprFunctor<void(const Expr&)>;
     TParent::VisitExpr(expr);
-    visit_counter_.insert({expr.get(), 1});
+    visit_counter_.insert({expr, 1});
   }
 }
 

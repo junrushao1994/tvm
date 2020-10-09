@@ -195,7 +195,7 @@ class GraphRuntimeCodegen : public backend::MemoizedExprTranslator<std::vector<G
     // First we convert all the parameters into input nodes.
     for (auto param : func->params) {
       auto node_ptr = GraphInputNode::make_node_ptr(param->name_hint(), GraphAttrs());
-      var_map_[param.get()] = AddNode(node_ptr, param);
+      var_map_[param] = AddNode(node_ptr, param);
     }
     heads_ = VisitExpr(func->body);
     std::ostringstream os;
@@ -305,7 +305,7 @@ class GraphRuntimeCodegen : public backend::MemoizedExprTranslator<std::vector<G
 
   std::vector<GraphNodeRef> VisitExpr_(const VarNode* op) override {
     Expr expr = GetRef<Expr>(op);
-    return var_map_[expr.get()];
+    return var_map_[expr];
   }
 
   std::vector<GraphNodeRef> VisitExpr_(const ConstantNode* op) override {
@@ -410,8 +410,8 @@ class GraphRuntimeCodegen : public backend::MemoizedExprTranslator<std::vector<G
   }
 
   std::vector<GraphNodeRef> VisitExpr_(const LetNode* op) override {
-    CHECK_EQ(var_map_.count(op->var.get()), 0);
-    var_map_[op->var.get()] = VisitExpr(op->value);
+    CHECK_EQ(var_map_.count(op->var), 0);
+    var_map_[op->var] = VisitExpr(op->value);
     return VisitExpr(op->body);
   }
   std::vector<GraphNodeRef> VisitExpr_(const TupleGetItemNode* op) override {
@@ -535,7 +535,7 @@ class GraphRuntimeCodegen : public backend::MemoizedExprTranslator<std::vector<G
   /*! \brief mod */
   runtime::Module* mod_;
   /*! \brief variable map */
-  std::unordered_map<const Object*, std::vector<GraphNodeRef>> var_map_;
+  std::unordered_map<const Expr, std::vector<GraphNodeRef>, RelayNodeHash, RelayNodeEqual> var_map_;
   /*! \brief target device */
   TargetsMap targets_;
   /*! \brief params */

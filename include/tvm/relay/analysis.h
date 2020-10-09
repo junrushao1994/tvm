@@ -243,7 +243,7 @@ TVM_DLL Array<Pattern> UnmatchedCases(const Match& match, const IRModule& mod);
  *
  * \return The reference count mapping.
  */
-TVM_DLL std::unordered_map<const Object*, size_t> GetExprRefCount(const Expr& body);
+TVM_DLL std::unordered_map<const Expr, size_t, RelayNodeHash, RelayNodeEqual> GetExprRefCount(const Expr& body);
 
 /*!
  * \brief For each variable, count the number of times it appears in the Expr.

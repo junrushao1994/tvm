@@ -110,12 +110,12 @@ class CalcDep : protected MixedModeVisitor {
   using MixedModeVisitor::VisitExpr_;
 
   void VisitLeaf(const Expr& e) final {
-    visit_counter_[e.get()]++;
+    visit_counter_[e]++;
     // The dce code separate variable into three parts:
     // used 0 times (remove)
     // used 1 times (inline)
     // used 2 times (dont do anything).
-    if (visit_counter_[e.get()] <= 2) {
+    if (visit_counter_[e] <= 2) {
       using TParent = ExprFunctor<void(const Expr&)>;
       TParent::VisitExpr(e);
     }

@@ -625,6 +625,45 @@ class TempExpr : public Expr {
   TVM_DEFINE_OBJECT_REF_METHODS(TempExpr, RelayExpr, TempExprNode);
 };
 
+/*! \brief VarID-aware Relay node equal functor */
+struct RelayNodeHash {
+  /*!
+   * \brief Calculate the hash code of an Expr
+   * \param a The given Relay node
+   * \return Hash code of a, string hash for strings and pointer address otherwise.
+   */
+  size_t operator()(const Expr& a) const;
+};
+
+/*! \brief VarID-aware Relay node equal functor */
+struct RelayNodeEqual {
+  /*!
+   * \brief Check if the two Expr are equal
+   * \param a One Expr
+   * \param b The other Expr
+   * \return String equality if both are strings, pointer address equality otherwise.
+   */
+  bool operator()(const Expr& a, const Expr& b) const;
+};
+
+inline size_t RelayNodeHash::operator()(const Expr& a) const {
+  if (const auto* var_node = a.as<VarNode>()) {
+    return ObjectPtrHash()(var_node->vid);
+  }
+  return ObjectPtrHash()(a);
+}
+
+inline bool RelayNodeEqual::operator()(const Expr& a, const Expr& b) const {
+  Expr left = a;
+  Expr right = b;
+  if (const auto* va = a.as<VarNode>()) {
+    if (const auto* vb = b.as<VarNode>()) {
+      return va->vid.same_as(vb->vid);
+   }
+  }
+  return ObjectEqual()(a, b);
+}
+
 }  // namespace relay
 }  // namespace tvm
 #endif  // TVM_RELAY_EXPR_H_

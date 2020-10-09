@@ -842,6 +842,7 @@ inline const ObjectType* ObjectRef::as() const {
 
 template <typename RefType, typename ObjType>
 inline RefType GetRef(const ObjType* ptr) {
+  
   static_assert(std::is_base_of<typename RefType::ContainerType, ObjType>::value,
                 "Can only cast to the ref of same container type");
   if (!RefType::_type_is_nullable) {

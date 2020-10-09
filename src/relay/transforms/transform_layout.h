@@ -89,12 +89,13 @@ class TransformMemorizer : public ObjectRef {
     if (src_layout.Equals(dst_layout)) {
       return raw;
     }
-
+    std::cout << "raw" << raw << std::endl;
+    std::cout << "raw.get" << raw.get() << std::endl;
     std::tuple<const Object*, std::string, std::string> key =
         std::make_tuple<>(raw.get(), src_layout.name(), dst_layout.name());
     auto& memo = operator->()->memo;
 
-    auto iter = memo.find(key);
+    auto iter = memo.find(key); // this is looking stuff up via pointer equality which is a yikes!!!
     if (iter != memo.end()) {
       return iter->second;
     } else {
@@ -212,7 +213,7 @@ class LayoutAlternatedExpr : public ObjectRef {
  * \param new_args The new arguments (some of them could be TempExpr).
  * \param ctx  Optional context information about ref_call.
  * \tparam TransformMemorizerT The derived TransformMemorizer type.
- * \return The rewriten result call, can also return nullptr,
+ * \return The rewritten result call, can also return nullptr,
  *         which indicate the rewriter should use the default fallback
  *         rule that realizes all its input and compose the call.
  *
@@ -288,7 +289,7 @@ Expr LayoutRewriter(const Call& ref_call, const Array<Expr>& new_args, const Obj
     return Expr(nullptr);
   }
   CHECK_EQ(old_in.size(), new_in.size());
-
+  // reading stuff here!
   // if new_in == 'undef':  new_in = old_in
   for (size_t i = 0; i < new_in.size(); ++i) {
     if (!new_in[i].defined()) {
@@ -297,7 +298,7 @@ Expr LayoutRewriter(const Call& ref_call, const Array<Expr>& new_args, const Obj
   }
 
   // new_op = alter(op)
-  Call new_call = memorizer.CallWithNewLayouts(ref_call, normal_new_args);
+  Call new_call = memorizer.CallWithNewLayouts(ref_call, normal_new_args); // maybe the issue is happening here
 
   // new_in2, new_out = op.infer(new_in)
   if (new_call->op->IsInstance<OpNode>()) {

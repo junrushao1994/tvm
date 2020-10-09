@@ -309,9 +309,11 @@ def test_alter_layout_resnet():
 
     with TempOpAttr("nn.conv2d", "FTVMAlterOpLayout", alter_conv2d):
         a = before()
+        print("before: \n", a)
         a = run_opt_pass(a, transform.AlterOpLayout())
+        print("after: \n", a)
         b = run_opt_pass(expected(), transform.InferType())
-
+        print("expected: \n", b)
     assert tvm.ir.structural_equal(a, b), "Actual = \n" + str(a)
 
 
