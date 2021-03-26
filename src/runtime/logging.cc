@@ -31,6 +31,17 @@
 
 namespace tvm {
 namespace runtime {
+namespace detail {
+
+#if !(defined(__MINGW32__) || defined(__MINGW64__))
+LogFatal::Entry& LogFatal::GetEntry() {
+  static thread_local LogFatal::Entry result;
+  return result;
+}
+#endif
+
+}  // namespace detail
+
 namespace {
 
 struct BacktraceInfo {

@@ -46,14 +46,6 @@
 #define TVM_RUNTIME_HEADER_ONLY 0
 #endif
 
-// Always inline macro only use in template
-// expansion cases where we know inline is important.
-#ifdef _MSC_VER
-#define TVM_ALWAYS_INLINE __forceinline
-#else
-#define TVM_ALWAYS_INLINE inline __attribute__((always_inline))
-#endif
-
 namespace tvm {
 namespace runtime {
 
